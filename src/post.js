@@ -34,23 +34,10 @@ void main(){
   vec2 dir = normalize(vec2(1.0, 0.6));
   float off = shift;
   vec3 col;
-  // --- Van Gogh brushwork: smear colour along a swirling flow field, then stroke texture
-  float fa = vnz(uv * vec2(5.0, 3.0) + vec2(time * 0.04, 0.0)) * 6.2831 + vnz(uv * 11.0) * 2.0;
-  vec2 fd = vec2(cos(fa), sin(fa));
-  vec2 sd = fd * px * 2.6 * paint;
-  vec3 bc = texture2D(tColor, uv).rgb * 0.28
-          + (texture2D(tColor, uv + sd).rgb + texture2D(tColor, uv - sd).rgb) * 0.22
-          + (texture2D(tColor, uv + sd * 2.2).rgb + texture2D(tColor, uv - sd * 2.2).rgb) * 0.14;
-  col = bc;
-  // print misregistration on top
-  col.r = mix(col.r, texture2D(tColor, uv + dir * off * px).r, 0.6);
-  col.b = mix(col.b, texture2D(tColor, uv - dir * off * px).b, 0.6);
+  col.r = texture2D(tColor, uv + dir * off * px).r;
+  col.g = texture2D(tColor, uv).g;
+  col.b = texture2D(tColor, uv - dir * off * px).b;
   col = srgb(col);
-  vec2 fc = gl_FragCoord.xy;
-  vec2 fp = vec2(-fd.y, fd.x);
-  float sid = hash(vec2(floor(dot(fc, fp) / 3.2), floor(dot(fc, fd) / 16.0)));
-  float ridge = sin(dot(fc, fp) * 1.9) * 0.5 + 0.5;
-  col *= 1.0 + ((sid - 0.5) * 0.14 + (ridge - 0.5) * 0.06) * paint;
 
   // --- ink outlines: depth sobel + color sobel ---
   float d0 = linDepth(uv);
@@ -75,12 +62,12 @@ void main(){
   vec2 gc = fract(g) - 0.5;
   float r = clamp((0.62 - L) * 1.25, 0.0, 0.72);
   float dotMask = 1.0 - smoothstep(r - 0.06, r + 0.02, length(gc));
-  col = mix(col, col * shadowTint, dotMask * 0.75);
+  col = mix(col, col * shadowTint, dotMask * 0.42);
   // light highlight dots (Ben-Day) in bright areas
   vec2 g2 = rot * (gl_FragCoord.xy + 3.0) / (cell * 0.75);
   float hr = clamp((L - 0.72) * 0.9, 0.0, 0.35);
   float hiMask = 1.0 - smoothstep(hr - 0.05, hr + 0.02, length(fract(g2) - 0.5));
-  col = mix(col, paperCol, hiMask * 0.35);
+  col = mix(col, paperCol, hiMask * 0.12);
 
   // --- posterize slightly ---
   col = floor(col * 7.0 + 0.5) / 7.0 * 0.35 + col * 0.65;
@@ -97,9 +84,9 @@ void main(){
   vec2 c = uv - 0.5; c.x *= res.x / res.y;
   float ang = atan(c.y, c.x);
   float rad = length(c);
-  float lines = step(0.86, hash(vec2(floor(ang * 70.0), floor(time * 14.0))));
-  float lineMask = lines * smoothstep(0.32, 0.75, rad) * speed;
-  col = mix(col, slow > 0.2 ? vec3(0.0, 0.9, 1.0) : paperCol, lineMask * 0.55);
+  float lines = step(0.9, hash(vec2(floor(ang * 60.0), floor(time * 6.0))));
+  float lineMask = lines * smoothstep(0.45, 0.85, rad) * speed;
+  col = mix(col, slow > 0.2 ? vec3(0.0, 0.9, 1.0) : paperCol, lineMask * 0.28);
 
   // vignette + hurt
   col *= 1.0 - smoothstep(0.55, 1.05, rad) * (0.35 + slow * 0.4);
@@ -114,7 +101,7 @@ void main(){
   }
 
   // paper grain
-  col += (hash(gl_FragCoord.xy + fract(time) * 100.0) - 0.5) * 0.045;
+  col += (hash(gl_FragCoord.xy) - 0.5) * 0.012; // static, barely-there paper tooth
 
   gl_FragColor = vec4(col, 1.0);
 }`;
@@ -133,7 +120,7 @@ export class ComicPost {
         res: { value: size.clone() }, time: { value: 0 }, slow: { value: 0 }, impact: { value: 0 },
         shift: { value: 1.5 }, speed: { value: 0 }, hurt: { value: 0 }, paint: { value: 1 },
         near: { value: camera.near }, far: { value: camera.far },
-        dotScale: { value: 5.0 * Math.max(1, renderer.getPixelRatio()) },
+        dotScale: { value: 6.5 * Math.max(1, renderer.getPixelRatio()) },
         inkCol: { value: new THREE.Color(0x0b0410) },
         paperCol: { value: new THREE.Color(1.0, 0.965, 0.88) },
         shadowTint: { value: new THREE.Vector3(0.35, 0.12, 0.45) },
@@ -149,7 +136,7 @@ export class ComicPost {
     const size = this.renderer.getDrawingBufferSize(new THREE.Vector2());
     this.rt.setSize(size.x, size.y);
     this.u.res.value.copy(size);
-    this.u.dotScale.value = 5.0 * Math.max(1, this.renderer.getPixelRatio());
+    this.u.dotScale.value = 6.5 * Math.max(1, this.renderer.getPixelRatio());
   }
   render(scene) {
     const r = this.renderer;

@@ -971,7 +971,7 @@ export class Game {
     u.slow.value += ((this.timeScale < 0.6 ? 1 : 0) - u.slow.value) * (1 - Math.exp(-realDt * 8));
     this.impact = Math.max(0, this.impact - realDt * 9); u.impact.value = this.impact > 0.5 ? 1 : 0;
     u.shift.value += (1.5 + this.world.beatPulse * 2.5 - u.shift.value) * (1 - Math.exp(-realDt * 12));
-    u.speed.value = Math.min(1, (this.speed - 12) / 8 + (this.timeScale < 0.6 ? 0.7 : 0) + (p.wall ? 0.6 : 0));
+    u.speed.value = Math.min(1, Math.max(0, (this.speed - 15) / 8) + (this.timeScale < 0.6 ? 0.7 : 0) + (p.wall ? 0.6 : 0));
     this.hurtFx = Math.max(0, this.hurtFx - realDt * 2); u.hurt.value = Math.max(this.hurtFx, p.armor === 0 ? 0.35 + Math.sin(this.time * 8) * 0.1 : 0);
   }
 
