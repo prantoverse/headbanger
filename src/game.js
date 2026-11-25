@@ -107,7 +107,8 @@ export class Game {
     this.ui.setArmor(1); this.ui.setScore(0, 1); this.ui.setFocus(0, false);
   }
 
-  start() { this.reset(); this.running = true; }
+  start(mode = 'run') { this.mode = mode; this.reset(); this.running = true; }
+  emit(type, data = {}) { if (this.onEvent) this.onEvent(type, data); }
 
   // ------------------------------------------------------------ weapons
   setWeapon(type, ammo) {
@@ -121,9 +122,9 @@ export class Game {
       return a;
     };
     const m = new THREE.Group();
-    const gun = buildWeaponModel(type, 0.62);
+    const gun = buildWeaponModel(type, 0.52);
     m.add(gun, arm());
-    m.position.set(0.2, -0.2, -0.5);
+    m.position.set(0.22, -0.21, -0.52);
     m.rotation.set(0.04, 0.2, -0.05);
     if (type === 'sword') { gun.rotation.set(1.1, 0, 0); gun.position.set(0, 0.02, -0.02); m.position.set(0.24, -0.24, -0.5); }
     if (type === 'fists') { const l = arm(); l.add(buildWeaponModel('fists', 0.55)); l.position.set(-0.2, -0.2, -0.5); l.rotation.y = -0.16; this.viewmodel.add(l); m.add(buildWeaponModel('fists', 0.55)); }
@@ -138,7 +139,9 @@ export class Game {
       if (dir === -p.wallSide) { p.wall = 0; p.vy = 4; p.lane = 1; }
       return;
     }
+    const before = p.lane;
     p.lane = Math.max(0, Math.min(2, p.lane + dir));
+    if (p.lane !== before) this.emit('lane', { dir });
     this.audio.sfx('jump');
   }
   jump() {
@@ -149,16 +152,16 @@ export class Game {
       p.wall = 1.15; p.wallSide = side; p.vy = 0; // wall run!
       this.ui.pop('WALL RUN!', innerWidth / 2 + side * innerWidth * 0.22, innerHeight * 0.45, '#00e5ff', 40);
       this.audio.sfx('jump'); this.triggerAutoSlow(0.5, 0.45); this.addScore(50, false);
-      this.haptics([15, 30, 15]);
+      this.haptics([15, 30, 15]); this.emit('wallrun');
       return;
     }
-    p.vy = 7.2; p.slide = 0; this.audio.sfx('jump');
+    p.vy = 7.2; p.slide = 0; this.audio.sfx('jump'); this.emit('jump');
   }
   slide() {
     const p = this.p; if (p.dead) return;
     if (p.wall) { p.wall = 0; return; }
     if (p.y > 0.05) p.vy = -14; // slam down
-    p.slide = 0.62;
+    p.slide = 0.62; this.emit('slide');
   }
 
   // world-space pick at screen point
@@ -311,6 +314,7 @@ export class Game {
     if (!this.execQueue.length) this.exitBulletTime();
   }
   exitBulletTime() {
+    this.emit('bulletTimeEnd', { kills: this.execKills || 0 }); this.execKills = 0;
     this.bulletTime = false; this.executing = false; this.targetScale = 1; this.focus = 0;
     this.markGroup.clear(); this.marks = [];
     this.audio.sfx('slowOut'); this.ui.setFocus(0, false); this.ui.setMarking(false);
@@ -355,6 +359,8 @@ export class Game {
     e.alive = false; e.deadT = 0;
     const head = part === 'head';
     const beat = this.onBeatQuality();
+    this.emit('kill', { head, beat, thrown: !!opt.thrown, melee: !!opt.melee, exec: this.executing });
+    if (this.executing) this.execKills = (this.execKills || 0) + 1;
     let pts = ENEMY[e.type].score * (head ? 2 : 1) * (beat === 'perfect' ? 1.5 : beat === 'good' ? 1.2 : 1);
     if (opt.thrown) pts *= 1.5;
     if (opt.melee) pts *= 1.3;
@@ -424,6 +430,11 @@ export class Game {
   hurt(src) {
     const p = this.p;
     if (p.invuln > 0 || p.dead) return;
+    if (this.mode === 'tutorial') {
+      p.invuln = 0.6; this.audio.sfx('hurt'); this.hurtFx = 0.8; this.haptics(50);
+      this.ui.pop('OUCH! TRY AGAIN', innerWidth / 2, innerHeight * 0.55, '#ff1f3d', 38);
+      this.emit('hurt', { src }); return;
+    }
     this.audio.sfx('hurt'); this.haptics([60, 30, 90]);
     this.hurtFx = 1; this.combo = 1; this.ui.setScore(this.score, this.combo);
     if (p.armor > 0) {
@@ -436,16 +447,18 @@ export class Game {
   }
 
   // ------------------------------------------------------------ spawning
-  spawnEnemy(type, x, zAhead, landBeat, elevated = 0) {
+  spawnEnemy(type, x, zAhead, landBeat, elevated = 0, passive = false) {
     const obj = buildEnemy(type);
     const z = this.p.z - zAhead;
     obj.position.set(x, elevated + 9, z);
     obj.rotation.y = 0;
     this.scene.add(obj);
-    this.enemies.push({ obj, type, alive: true, landed: false, landBeat, baseY: elevated, fireOffset: Math.floor(Math.random() * 2), rushing: false, t: 0, burst: 0 });
+    this.enemies.push({ obj, type, alive: true, landed: false, landBeat, baseY: elevated, fireOffset: Math.floor(Math.random() * 2), rushing: false, t: 0, burst: 0, passive });
+    return this.enemies[this.enemies.length - 1];
   }
 
   spawnBar(barBeat) {
+    if (this.mode === 'tutorial') return;
     const bar = this.barCount++;
     const diff = Math.min(1, this.time / 150) + this.lap * 0.25;
     const pool = ['pistol'];
@@ -478,10 +491,10 @@ export class Game {
     }
   }
 
-  spawnHazard(zAhead) {
+  spawnHazard(zAhead, forceKind) {
     const z = this.p.z - zAhead;
     const kinds = ['low', 'high', 'lane', 'dive', 'cross'];
-    const kind = kinds[Math.floor(Math.random() * kinds.length)];
+    const kind = forceKind || kinds[Math.floor(Math.random() * kinds.length)];
     const b = BIOMES[this.world.biomeAt(z)];
     const g = new THREE.Group(); g.position.z = z;
     const red = flat(0xff1f3d), stripe = flat(0xffe600);
@@ -489,7 +502,7 @@ export class Game {
     if (kind === 'low') { // full-width low barrier -> jump
       g.add(box(toon(b.wall), 7, 0.8, 0.5, 0, 0.4, 0));
       for (let i = -3; i <= 3; i++) g.add(box(i % 2 ? red : stripe, 0.9, 0.82, 0.52, i, 0.4, 0));
-      h.yMin = 0; h.yMax = 0.85; h.lanes = [0, 1, 2];
+      h.yMin = 0; h.yMax = 0.6; h.lanes = [0, 1, 2];
     } else if (kind === 'high') { // bar at head height -> slide
       g.add(box(red, 7.4, 0.35, 0.35, 0, 1.45, 0));
       g.add(box(toon(b.wall), 0.3, 1.6, 0.3, -3.6, 0.8, 0), box(toon(b.wall), 0.3, 1.6, 0.3, 3.6, 0.8, 0));
@@ -514,7 +527,7 @@ export class Game {
       rocket.position.set(30, 1.3, 0); g.add(rocket); h.rocket = rocket; h.armed = true;
       const warn = box(red, 7.4, 0.04, 0.6, 0, 1.3, 0); g.add(warn); h.warn = warn;
     }
-    this.scene.add(g); this.hazards.push(h);
+    this.scene.add(g); this.hazards.push(h); return h;
   }
 
   spawnCanister(type, zAhead) {
@@ -527,7 +540,8 @@ export class Game {
     const hit = new THREE.Mesh(BOX, hitMat); hit.scale.set(2, 2.4, 2); g.add(hit);
     g.position.set(side * 2.9, 2.6, this.p.z - zAhead);
     this.scene.add(g);
-    this.hazards.push({ kind: 'canister', type, obj: g, hit, core, ring, z: g.position.z, lanes: [] });
+    const h = { kind: 'canister', type, obj: g, hit, core, ring, z: g.position.z, lanes: [] };
+    this.hazards.push(h); return h;
   }
 
   // ------------------------------------------------------------ per-16th rhythm events
@@ -536,12 +550,12 @@ export class Game {
     const beatIdx = Math.floor(step / 4);
     if (inBeat === 0 && this.biomeIndex >= 0) this.ui.beat();
     for (const e of this.enemies) {
-      if (!e.alive || !e.landed) continue;
+      if (!e.alive || !e.landed || e.passive) continue;
       const dz = this.p.z - e.obj.position.z;
       if (dz < 7 || dz > 48) continue;
       if (e.type === 'pistol' && inBeat === 0 && (beatIdx + e.fireOffset) % 2 === 0) this.enemyFire(e, 1);
       if (e.type === 'shotgun' && inBeat === 0 && beatIdx % 4 === (e.fireOffset ? 2 : 0) && dz < 30) this.enemyFire(e, 3);
-      if (e.type === 'smg' && beatIdx % 4 === 2 + e.fireOffset && inBeat < 3) this.enemyFire(e, 1);
+      if (e.type === 'smg' && (e.tut ? beatIdx % 2 === 0 : beatIdx % 4 === 2 + e.fireOffset) && inBeat < 3) this.enemyFire(e, 1);
       if (e.type === 'sword' && inBeat === 0 && dz < 30) e.rushing = true;
     }
   }
@@ -627,7 +641,7 @@ export class Game {
     }
 
     // speed ramp
-    this.speed = Math.min(19, 11 + this.time * 0.035 + this.lap * 1.5);
+    this.speed = this.mode === 'tutorial' ? 9 : Math.min(19, 11 + this.time * 0.035 + this.lap * 1.5);
     if (!p.dead) p.z -= this.speed * dt;
     this.stats.dist = -p.z;
 
@@ -724,7 +738,8 @@ export class Game {
         b.passed = true;
         const dx = Math.abs(b.obj.position.x - p.x), by = b.obj.position.y;
         const hit = dx < 0.62 && by > bodyMin && by < bodyMax;
-        if (hit && !p.dead) this.hurt();
+        this.emit('bullet', { hit, dx });
+        if (hit && !p.dead) this.hurt('bullet');
         else if (dx < 1.9 && !p.dead) {
           this.audio.sfx('whiz');
           if (this.autoSlowCd <= 0 && !this.bulletTime) {
@@ -764,16 +779,17 @@ export class Game {
           if (k >= 1) h.armed = false;
         }
       }
-      if (!h.checked && dz >= 0) {
+      if (!h.checked && dz <= 0) {
         h.checked = true;
         const lane = LANES.reduce((a, b, idx) => (Math.abs(b - p.x) < Math.abs(LANES[a] - p.x) ? idx : a), 0);
         const inLane = h.lanes.includes(lane) && !p.wall;
         const overlap = bodyMax > h.yMin && bodyMin < h.yMax;
-        if (inLane && overlap) this.hurt();
+        this.emit('hazard', { kind: h.kind, ok: !(inLane && overlap) });
+        if (inLane && overlap) this.hurt('hazard');
         else if (h.kind !== 'lane') { this.addScore(30); this.ui.pop(h.kind === 'high' ? 'LIMBO!' : h.kind === 'low' ? 'VAULT!' : 'DODGED!', innerWidth / 2, innerHeight * 0.66, '#fff6e0', 28); }
         if (h.kind === 'cross' && h.rocket) { this.scene.remove(h.rocket); }
       }
-      if (dz > 10) { this.scene.remove(h.obj); this.hazards.splice(i, 1); }
+      if (dz < -10) { this.scene.remove(h.obj); this.hazards.splice(i, 1); }
     }
 
     // pickups

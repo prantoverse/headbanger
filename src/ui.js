@@ -42,6 +42,27 @@ export class UI {
     const r = this.beatRing;
     r.animate([{ opacity: 0.85, transform: 'scale(.6)' }, { opacity: 0, transform: 'scale(1.5)' }], { duration: 300, easing: 'ease-out' });
   }
+  // ---------- tutorial ----------
+  tutorial(on) { $('tut').classList.toggle('hidden', !on); if (!on) $('ready').classList.add('hidden'); }
+  setStep(n, total, title, html) {
+    $('tut-step').textContent = `STEP ${n}/${total} · ${title}`;
+    $('tut-text').innerHTML = html;
+    const c = $('tut-card'); c.classList.remove('in'); void c.offsetWidth; c.classList.add('in');
+  }
+  setCharge(pct) {
+    $('charge-fill').style.height = pct + '%';
+    const el = $('charge-pct'); el.textContent = pct + '%';
+    el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump');
+    if (pct > 0) { const r = $('charge-bar').getBoundingClientRect(); this.pop('+10%', r.left - 30, r.top + r.height * (1 - pct / 100), '#ffe600', 34); }
+  }
+  pulseHint(on) { this.beatRing.classList.toggle('hint', on); }
+  readySplash() {
+    const r = $('ready'); r.classList.remove('hidden');
+    r.querySelectorAll('div').forEach((d) => { d.style.animation = 'none'; void d.offsetWidth; d.style.animation = ''; });
+    $('tut-card').style.visibility = 'hidden';
+    setTimeout(() => { r.classList.add('hidden'); $('tut-card').style.visibility = ''; }, 2800);
+  }
+
   biome(name) { const b = this.biomeEl; b.textContent = name; b.classList.remove('show'); void b.offsetWidth; b.classList.add('show'); }
   moveCrosshair(x, y) { this.crosshair.style.left = x + 'px'; this.crosshair.style.top = y + 'px'; }
 

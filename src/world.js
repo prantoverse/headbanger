@@ -179,7 +179,7 @@ export class World {
     const bi = this.biomeAt(z0 - CHUNK / 2);
     const b = BIOMES[bi];
     const g = new THREE.Group();
-    const c = { z0, group: g, biome: bi, wallL: Math.random() < 0.55, wallR: Math.random() < 0.55 };
+    const c = { z0, group: g, biome: bi, wallL: this.forceWalls || Math.random() < 0.55, wallR: this.forceWalls || Math.random() < 0.55 };
     const zc = z0 - CHUNK / 2;
     const idx = Math.round(-z0 / CHUNK);
     const acc = (i) => b.accents[i % b.accents.length];

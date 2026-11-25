@@ -7,7 +7,7 @@
   <title>HEADBANGER — gun-fu rhythm runner</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Caveat:wght@600;700&family=Permanent+Marker&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/src/style.css" />
 </head>
 <body>
@@ -29,6 +29,15 @@
     <div id="marks-hint">TAP TO MARK · <b>EXECUTE</b></div>
     <div id="beat-ring"></div>
     <div id="crosshair"></div>
+    <div id="tut" class="hidden">
+      <div id="tut-card"><div id="tut-step">STEP 1/10 · MOVE</div><div id="tut-text"></div></div>
+      <div id="charge">
+        <div id="charge-pct">0%</div>
+        <div id="charge-bar"><div id="charge-fill"></div><div id="charge-ticks"></div></div>
+        <div id="charge-label">HEADBANG CHARGE</div>
+      </div>
+      <button id="btn-skip">SKIP ▸</button>
+    </div>
     <div id="pops"></div>
     <div id="touch-ui">
       <button id="btn-throw">THROW</button>
@@ -37,20 +46,30 @@
   </div>
 
   <div id="menu" class="screen">
-    <div class="panel">
-      <h1 id="title">HEAD<span>BANGER</span></h1>
-      <p class="tag">gun-fu · heavy metal · bullet time</p>
-      <button id="btn-play">PLAY</button>
-      <div class="how">
-        <div><b>SHOOT</b> click / tap enemies — <i>headshots + on the beat</i> score big</div>
-        <div><b>DODGE</b> A / D or swipe ← → &nbsp;·&nbsp; <b>JUMP</b> W / Space / swipe ↑ &nbsp;·&nbsp; <b>SLIDE</b> S / swipe ↓</div>
-        <div><b>WALL RUN</b> jump while on an outer lane next to a wall</div>
-        <div><b>EMPTY?</b> <b>THROW</b> your gun (Q / right-click / button) — hit an enemy to steal their weapon</div>
-        <div><b>BULLET TIME</b> shoot <span class="y">yellow canisters</span>, mark up to 4 enemies, <b>EXECUTE</b> (E / button)</div>
-        <div><span class="m">Pink canisters</span> = one ricochet round</div>
+    <div class="menu-wrap">
+      <div class="panel menu-main">
+        <h1 id="title">HEAD<span>BANGER</span></h1>
+        <p class="tag">gun-fu · heavy metal · bullet time</p>
+        <button id="btn-play">PLAY</button>
+        <p class="best" id="best"></p>
+        <p class="hint" id="menu-hint"></p>
       </div>
-      <p class="best" id="best"></p>
+      <button id="btn-tutorial" class="notepad" aria-label="Tutorial">
+        <div class="spiral"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        <div class="sheet">
+          <div class="np-note">complete ✓</div>
+          <div class="np-title">Tutorial</div>
+          <svg class="np-strike" viewBox="0 0 200 40" preserveAspectRatio="none"><path d="M4 26 C 40 18, 70 30, 104 20 S 170 14, 196 22" /><path d="M10 31 C 60 24, 120 30, 190 17" /></svg>
+          <div class="np-sub">10 quick moves · learn the gun-fu</div>
+        </div>
+      </button>
     </div>
+  </div>
+
+  <div id="ready" class="hidden">
+    <div class="ready-burst"></div>
+    <div class="ready-small">100% CHARGED</div>
+    <div class="ready-big">READY TO<br><span>HEADBANG!</span></div>
   </div>
 
   <div id="over" class="screen hidden">
@@ -58,6 +77,7 @@
       <h2>WASTED</h2>
       <div id="final"></div>
       <button id="btn-again">AGAIN</button>
+      <button id="btn-menu" class="secondary">MENU</button>
     </div>
   </div>
 

@@ -4,6 +4,7 @@ import { World } from './world.js';
 import { Game, WEAPONS } from './game.js';
 import { ComicPost } from './post.js';
 import { UI } from './ui.js';
+import { Tutorial } from './tutorial.js';
 
 const canvas = document.getElementById('c');
 const coarse = matchMedia('(pointer:coarse)').matches;
@@ -51,19 +52,49 @@ game.onGameOver = () => {
   ui.show('hud', false); ui.show('over', true); showBest();
 };
 
+// ---------------------------------------------------------------- menu + tutorial flags
+const store = {
+  get: (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } },
+  set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} },
+};
+const notepad = document.getElementById('btn-tutorial');
+function refreshMenu() {
+  const done = store.get('headbanger.tutorial') === '1';
+  notepad.classList.remove('done'); void notepad.offsetWidth;
+  notepad.classList.toggle('done', done);
+  document.getElementById('menu-hint').textContent = store.get('headbanger.tutSeen') ? 'Space / Enter to play' : 'First time? PLAY starts with a quick tutorial.';
+}
+refreshMenu();
+
+const tutorial = new Tutorial(game, ui, () => startGame('run'));
+
 let audioReady = null;
-async function startGame() {
+async function startGame(mode) {
+  if (typeof mode !== 'string') mode = store.get('headbanger.tutSeen') ? 'run' : 'tutorial';
+  if (tutorial.active || mode === 'run') tutorial.stop();
   ui.show('menu', false); ui.show('over', false); ui.show('hud', true);
   if (!audioReady) audioReady = audio.init();
   audio.resume && audio.ctx && audio.resume();
   await audioReady; audio.resume();
   world.reset();
-  game.start();
+  game.start(mode);
   audio.play(0);
-  ui.biome('NEON ROOFTOPS');
+  if (mode === 'tutorial') {
+    store.set('headbanger.tutSeen', '1');
+    ui.biome('TRAINING DAY');
+    tutorial.start();
+  } else ui.biome('NEON ROOFTOPS');
 }
-document.getElementById('btn-play').addEventListener('click', startGame);
-document.getElementById('btn-again').addEventListener('click', startGame);
+function toMenu() {
+  tutorial.stop(); game.running = false; audio.stop();
+  ui.show('hud', false); ui.show('over', false); ui.show('menu', true);
+  refreshMenu(); showBest();
+}
+document.getElementById('btn-play').addEventListener('click', () => startGame());
+document.getElementById('btn-again').addEventListener('click', () => startGame('run'));
+document.getElementById('btn-menu').addEventListener('click', toMenu);
+notepad.addEventListener('click', () => startGame('tutorial'));
+document.getElementById('btn-skip').addEventListener('pointerdown', (e) => { e.stopPropagation(); startGame('run'); });
 
 // ---------------------------------------------------------------- input
 let pointer = { x: innerWidth / 2, y: innerHeight / 2, down: false, auto: 0 };
@@ -114,6 +145,7 @@ addEventListener('keydown', (e) => {
     case 'KeyS': case 'ArrowDown': case 'ControlLeft': game.slide(); break;
     case 'KeyQ': game.throwWeapon(pointer.x, pointer.y); break;
     case 'KeyE': case 'KeyF': game.execute(); break;
+    case 'Escape': toMenu(); break;
   }
 });
 document.getElementById('btn-throw').addEventListener('pointerdown', (e) => { e.stopPropagation(); game.throwWeapon(); });
@@ -153,6 +185,7 @@ renderer.setAnimationLoop(() => {
     if (pointer.down && WEAPONS[game.p.weapon].auto && !game.bulletTime) game.fire(pointer.x, pointer.y);
     for (const t of touches.values()) if (!t.swiped && WEAPONS[game.p.weapon].auto && performance.now() - t.t0 > 180) game.fire(t.x, t.y);
     game.update(dt);
+    tutorial.update();
   } else if (!game.p || !game.p.dead) {
     // menu attract: glide through the world
     attractZ -= dt * 8;
@@ -169,3 +202,4 @@ renderer.setAnimationLoop(() => {
 // show title pop-in
 document.getElementById('title').animate([{ transform: 'rotate(-3deg) scale(2)', opacity: 0 }, { transform: 'rotate(-3deg) scale(1)', opacity: 1 }], { duration: 500, easing: 'cubic-bezier(.2,1.6,.4,1)' });
 window.__game = game;
+window.__tut = tutorial;
