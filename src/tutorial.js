@@ -62,7 +62,7 @@ export function makeSteps() {
       on(s, ev) { return ev === 'wallrun'; },
     },
     {
-      title: 'BULLET TIME', text: T('Shoot the <b>yellow canister</b>, click to mark the goons, press <b>E</b>', 'Shoot the <b>yellow canister</b>, tap to mark the goons, hit <b>EXECUTE</b>'),
+      title: 'FOCUS', text: T('Shoot the <b>yellow canister</b> — time slows. <b>Click</b> 2 goons before it ends', 'Shoot the <b>yellow canister</b> — time slows. <b>Tap</b> 2 goons before it ends'),
       ensure(g, s) {
         if (g.bulletTime) return;
         if (!s.c || !g.hazards.includes(s.c)) s.c = g.spawnCanister('chrono', 30);

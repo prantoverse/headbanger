@@ -98,7 +98,8 @@ export class Game {
     this.stats = { kills: 0, heads: 0, beats: 0, dist: 0, best: 0 };
     this.timeScale = 1; this.targetScale = 1;
     this.focus = 0;             // seconds of bullet time remaining (real)
-    this.bulletTime = false; this.executing = false; this.execQueue = []; this.execTimer = 0;
+    this.bulletTime = false; this.focusKills = 0; this.alertKey = '';
+    this.aim = { x: 0, y: 0 }; this.aimS = { x: 0, y: 0 };
     this.hitstop = 0; this.autoSlow = 0; this.autoSlowCd = 0; this.impact = 0; this.hurtFx = 0;
     this.ricochet = false;
     this.last16 = -1; this.lastBar = -1; this.barCount = 0;
@@ -116,8 +117,8 @@ export class Game {
     this.viewmodel.clear();
     const arm = (side) => {
       const a = new THREE.Group();
-      a.add(box(toon(0x14101e), 0.085, 0.085, 0.34, 0, -0.03, 0.2));   // sleeve
-      a.add(box(flat(0xff2e88), 0.09, 0.09, 0.03, 0, -0.03, 0.03));  // cuff
+      const sl = box(toon(0x14101e), 0.08, 0.08, 0.2, 0, -0.07, 0.1); sl.rotation.x = 0.5; a.add(sl);   // sleeve angled down
+      a.add(box(flat(0xff2e88), 0.085, 0.085, 0.03, 0, -0.035, 0.03));  // cuff
       a.add(box(toon(0xffc9a0), 0.065, 0.075, 0.08, 0, -0.03, -0.02));  // hand
       return a;
     };
@@ -200,7 +201,7 @@ export class Game {
 
   fire(sx, sy) {
     const p = this.p; if (p.dead || !this.running) return;
-    if (this.bulletTime && !this.executing) return this.mark(sx, sy);
+    if (this.bulletTime) return this.focusShot(sx, sy);
     if (p.cool > 0) return;
     const W = WEAPONS[p.weapon];
     if (p.ammo <= 0) { this.audio.sfx('empty'); p.cool = 0.15; this.ui.flashThrow(); return; }
@@ -288,36 +289,39 @@ export class Game {
     this.haptics([30, 40, 60]);
   }
   enterBulletTime() {
-    this.bulletTime = true; this.executing = false; this.focus = 4.5; this.marks = []; this.markGroup.clear();
-    this.targetScale = 0.18; this.audio.sfx('slowIn');
+    this.bulletTime = true; this.focus = 5; this.focusKills = 0;
+    this.targetScale = 0.2; this.audio.sfx('tapeStop');
     this.ui.setFocus(1, true); this.ui.setMarking(true);
   }
-  mark(sx, sy) {
-    if (this.marks.length >= 4) return;
+  // FOCUS: every click is a free, instant shot. Just point and click.
+  focusShot(sx, sy) {
+    const p = this.p;
+    if (p.cool > 0) return;
+    p.cool = 0.09;
     const t = this.pick(sx, sy);
-    if (!t || !t.enemy) return;
-    if (this.marks.find((m) => m.enemy === t.enemy)) return;
-    this.marks.push({ enemy: t.enemy, part: t.part });
-    const icon = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.7), flat(t.part === 'head' ? 0xff1f3d : 0xffe600));
-    icon.material = icon.material.clone(); icon.material.depthTest = false; icon.rotation.z = Math.PI / 4; icon.renderOrder = 10;
-    icon.userData.enemy = t.enemy; icon.userData.part = t.part;
-    this.markGroup.add(icon);
-    this.audio.sfx('mark', { n: this.marks.length }); this.haptics(10);
-    const s = this.toScreen(t.enemy.obj.position.clone().setY(2.2));
-    this.ui.pop(t.part === 'head' ? '☠' : '✕', s.x, s.y, t.part === 'head' ? '#ff1f3d' : '#ffe600', 44);
-    if (this.marks.length >= 4) setTimeout(() => this.execute(), 180);
+    const muzzle = this.muzzlePos();
+    this.audio.sfx(p.weapon === 'shotgun' ? 'shotgun' : 'pistol'); this.vmKick(0.6); this.haptics(15);
+    if (t && t.canister) { this.tracer(muzzle, t.point); this.breakCanister(t.canister); return; }
+    if (t && t.pickup) { this.grabPickup(t.pickup); return; }
+    if (!t || !t.enemy) {
+      const ndc = new THREE.Vector2((sx / innerWidth) * 2 - 1, -(sy / innerHeight) * 2 + 1);
+      this.ray.setFromCamera(ndc, this.camera);
+      this.tracer(muzzle, this.ray.ray.at(60, new THREE.Vector3()), 0x00e5ff);
+      return;
+    }
+    this.tracer(muzzle, t.point, 0x00e5ff);
+    this.focusKills++;
+    this.killEnemy(t.enemy, t.part, {});
+    this.hitstop = 0;
+    const s2 = this.toScreen(t.point);
+    if (this.focusKills > 1) this.ui.pop('×' + this.focusKills, s2.x + 50, s2.y - 50, '#00e5ff', 40);
   }
-  execute() {
-    if (!this.bulletTime || this.executing) return;
-    this.executing = true; this.execQueue = this.marks.slice(); this.execTimer = 0.05;
-    this.ui.setMarking(false);
-    if (!this.execQueue.length) this.exitBulletTime();
-  }
+  execute() { if (this.bulletTime) this.exitBulletTime(); }
   exitBulletTime() {
-    this.emit('bulletTimeEnd', { kills: this.execKills || 0 }); this.execKills = 0;
-    this.bulletTime = false; this.executing = false; this.targetScale = 1; this.focus = 0;
-    this.markGroup.clear(); this.marks = [];
-    this.audio.sfx('slowOut'); this.ui.setFocus(0, false); this.ui.setMarking(false);
+    this.emit('bulletTimeEnd', { kills: this.focusKills || 0 });
+    if (this.focusKills > 1) this.multiPop(this.focusKills);
+    this.bulletTime = false; this.targetScale = 1; this.focus = 0; this.focusKills = 0;
+    this.audio.sfx('tapeStart'); this.ui.setFocus(0, false); this.ui.setMarking(false);
   }
   triggerAutoSlow(scale, dur) {
     if (this.autoSlowCd > 0 || this.bulletTime) return;
@@ -346,12 +350,13 @@ export class Game {
 
   // ------------------------------------------------------------ combat helpers
   muzzlePos() { return (this.vm || this.camera).localToWorld(new THREE.Vector3(0, 0.06, -0.4)); }
+  setAim(sx, sy) { this.aim.x = (sx / innerWidth) * 2 - 1; this.aim.y = -(sy / innerHeight) * 2 + 1; }
   vmKick(k) { this.p.kick = Math.min(1.2, this.p.kick + k); }
   toScreen(v) { const s = v.clone().project(this.camera); return { x: (s.x + 1) / 2 * innerWidth, y: (1 - s.y) / 2 * innerHeight }; }
 
   onBeatQuality() {
     const b = this.audio.beat; const d = Math.abs(b - Math.round(b));
-    return d < 0.14 ? 'perfect' : d < 0.24 ? 'good' : null;
+    return d < 0.14 ? 'perfect' : d < 0.28 ? 'good' : null;
   }
 
   killEnemy(e, part, opt = {}) {
@@ -549,6 +554,7 @@ export class Game {
     const inBeat = step % 4;
     const beatIdx = Math.floor(step / 4);
     if (inBeat === 0 && this.biomeIndex >= 0) this.ui.beat();
+    if (this.bulletTime) { if (inBeat === 0) this.audio.sfx('heart'); return; }
     for (const e of this.enemies) {
       if (!e.alive || !e.landed || e.passive) continue;
       const dz = this.p.z - e.obj.position.z;
@@ -596,38 +602,13 @@ export class Game {
     if (p.dead) this.timeScale = Math.max(0.12, this.timeScale);
     const dt = realDt * this.timeScale;
     this.time += dt;
-    this.audio.update(realDt, this.timeScale);
+    this.audio.update(realDt, this.timeScale, this.bulletTime);
 
-    // focus / execute
+    // focus timer
     if (this.bulletTime) {
-      if (!this.executing) {
-        this.focus -= realDt;
-        this.ui.setFocus(this.focus / 4.5, true);
-        if (this.focus <= 0) this.execute();
-      } else {
-        this.execTimer -= realDt;
-        if (this.execTimer <= 0) {
-          const m = this.execQueue.shift();
-          if (m) {
-            if (m.enemy.alive) {
-              this.audio.sfx(p.weapon === 'shotgun' ? 'shotgun' : 'pistol'); this.vmKick(0.6);
-              this.tracer(this.muzzlePos(), m.enemy.obj.position.clone().setY(m.part === 'head' ? 1.8 : 1.2));
-              this.killEnemy(m.enemy, m.part, { multi: this.marks.length });
-              this.hitstop = 0;
-            }
-            const icon = this.markGroup.children.find((c) => c.userData.enemy === m.enemy); if (icon) this.markGroup.remove(icon);
-            this.execTimer = BEAT / 4 / Math.max(this.timeScale, 0.25) * 0.5; // snappy 16ths
-          } else {
-            if (this.marks.length > 1) this.multiPop(this.marks.length);
-            this.exitBulletTime();
-          }
-        }
-      }
-      for (const icon of this.markGroup.children) {
-        const e = icon.userData.enemy;
-        icon.position.copy(e.obj.position).setY(e.obj.position.y + (icon.userData.part === 'head' ? 1.8 : 1.2));
-        icon.lookAt(this.camera.getWorldPosition(this.tmpV2)); icon.rotation.z = performance.now() / 300;
-      }
+      this.focus -= realDt;
+      this.ui.setFocus(this.focus / 5, true);
+      if (this.focus <= 0) this.exitBulletTime();
     }
 
     // 16th-note rhythm clock
@@ -680,7 +661,17 @@ export class Game {
     // viewmodel kick/sway
     p.kick *= Math.exp(-realDt * 14);
     if (this.vm) {
-      this.vm.position.z = -0.5 + p.kick * 0.07; this.vm.rotation.x = 0.04 + p.kick * 0.45;
+      // aim the gun at the crosshair
+      const k = 1 - Math.exp(-realDt * 18);
+      this.aimS.x += (this.aim.x - this.aimS.x) * k; this.aimS.y += (this.aim.y - this.aimS.y) * k;
+      const tanV = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
+      const gx = 0.22 + this.aimS.x * 0.07, gy = -0.21 + this.aimS.y * 0.05;
+      const vx = this.aimS.x * tanV * this.camera.aspect * 20 - gx, vy = this.aimS.y * tanV * 20 - gy, vz = -20 + 0.52;
+      this.vm.rotation.order = 'YXZ';
+      this.vm.rotation.y = Math.atan2(-vx, -vz);
+      this.vm.rotation.x = Math.atan2(vy, Math.hypot(vx, vz)) + p.kick * 0.45;
+      this.vm.rotation.z = -0.05 - this.aimS.x * 0.15;
+      this.vm.position.set(gx, gy, -0.5 + p.kick * 0.07);
       this.viewmodel.position.y = bob * 0.5 + (p.slide > 0 ? 0.08 : 0);
     }
 
@@ -838,6 +829,21 @@ export class Game {
       this.ui.biome(BIOMES[this.biomeIndex].name + (this.lap ? ' · LAP ' + (this.lap + 1) : ''));
       this.impact = 0.8; this.haptics([20, 20, 20, 20, 60]);
     }
+
+    // big centre-screen alerts
+    let al = null;
+    const touchUI = matchMedia('(pointer:coarse)').matches;
+    if (!p.dead) {
+      if (this.bulletTime) al = ['focus', 'FOCUS', touchUI ? 'TAP THE GOONS' : 'CLICK THE GOONS', '#00e5ff', true];
+      else if (p.ammo <= 0 && !WEAPONS[p.weapon].melee) al = ['throw', 'THROW YOUR GUN!', touchUI ? 'HIT  THROW' : 'PRESS  Q  /  RIGHT-CLICK', '#ff1f3d'];
+      else if (p.weapon === 'fists') al = ['grab', 'GRAB A GUN!', touchUI ? 'TAP A DROPPED GUN · PUNCH UP CLOSE' : 'CLICK A DROPPED GUN · PUNCH UP CLOSE', '#ffe600'];
+      else {
+        const c = this.hazards.find((h) => h.kind === 'canister' && !h.broken && p.z - h.obj.position.z < 34 && p.z - h.obj.position.z > 3);
+        if (c) al = ['can' + c.type, 'SHOOT THE CANISTER!', c.type === 'chrono' ? 'YELLOW = FOCUS' : 'PINK = RICOCHET', c.type === 'chrono' ? '#ffe600' : '#ff2e88'];
+      }
+    }
+    const key = al ? al[0] : '';
+    if (key !== this.alertKey) { this.alertKey = key; this.ui.setAlert(al && al[1], al && al[2], al && al[3], al && al[4]); }
 
     // post fx
     const u = this.post.u;

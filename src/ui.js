@@ -7,7 +7,7 @@ export class UI {
     this.scoreEl = $('score'); this.comboEl = $('combo');
     this.ammoEl = $('ammo'); this.weaponBox = $('weapon-box'); this.weaponName = $('weapon-name');
     this.focusBar = $('focus-bar'); this.focusFill = this.focusBar.firstElementChild;
-    this.marksHint = $('marks-hint'); this.execBtn = $('btn-exec');
+    this.alertEl = $('alert'); this.alertMain = $('alert-main'); this.alertSub = $('alert-sub');
     this.armorEl = $('armor'); this.beatRing = $('beat-ring'); this.biomeEl = $('biome-name');
     this.crosshair = $('crosshair');
     this.armorEl.innerHTML = '<span></span>';
@@ -36,7 +36,15 @@ export class UI {
     this.focusBar.classList.toggle('on', on);
     this.focusFill.style.width = Math.max(0, f) * 100 + '%';
   }
-  setMarking(on) { this.marksHint.classList.toggle('on', on); this.execBtn.classList.toggle('on', on); this.crosshair.classList.toggle('mark', on); }
+  setMarking(on) { this.crosshair.classList.toggle('mark', on); }
+  // Severed-Steel style giant prompt in the middle of the screen
+  setAlert(main, sub, color, brief) {
+    const a = this.alertEl;
+    if (!main) { a.classList.remove('on'); return; }
+    this.alertMain.textContent = main; this.alertSub.textContent = sub || '';
+    a.style.setProperty('--ac', color || '#ffe600');
+    a.classList.remove('on', 'brief'); void a.offsetWidth; a.classList.add('on'); if (brief) a.classList.add('brief');
+  }
   setRicochet(on) { this.crosshair.style.borderColor = on ? '#ff2e88' : ''; }
   beat() {
     const r = this.beatRing;

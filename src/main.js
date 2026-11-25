@@ -72,10 +72,12 @@ let audioReady = null;
 async function startGame(mode) {
   if (typeof mode !== 'string') mode = store.get('headbanger.tutSeen') ? 'run' : 'tutorial';
   if (tutorial.active || mode === 'run') tutorial.stop();
-  ui.show('menu', false); ui.show('over', false); ui.show('hud', true);
   if (!audioReady) audioReady = audio.init();
   audio.resume && audio.ctx && audio.resume();
-  await audioReady; audio.resume();
+  const playBtn = document.getElementById('btn-play'), label = playBtn.textContent;
+  playBtn.textContent = 'TUNING GUITARS…';
+  await audioReady; audio.resume(); playBtn.textContent = label;
+  ui.show('menu', false); ui.show('over', false); ui.show('hud', true);
   world.reset();
   game.start(mode);
   audio.play(0);
@@ -104,6 +106,7 @@ canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 canvas.addEventListener('pointerdown', (e) => {
   if (!game.running) return;
   pointer.x = e.clientX; pointer.y = e.clientY; ui.moveCrosshair(e.clientX, e.clientY);
+  game.setAim(e.clientX, e.clientY);
   if (e.pointerType === 'mouse') {
     if (e.button === 2) game.throwWeapon(e.clientX, e.clientY);
     else { pointer.down = true; game.fire(e.clientX, e.clientY); }
@@ -115,7 +118,7 @@ canvas.addEventListener('pointerdown', (e) => {
 });
 canvas.addEventListener('pointermove', (e) => {
   pointer.x = e.clientX; pointer.y = e.clientY;
-  if (e.pointerType === 'mouse') { ui.moveCrosshair(e.clientX, e.clientY); return; }
+  if (e.pointerType === 'mouse') { ui.moveCrosshair(e.clientX, e.clientY); game.setAim && game.aim && game.setAim(e.clientX, e.clientY); return; }
   const t = touches.get(e.pointerId); if (!t || t.swiped) return;
   t.x = e.clientX; t.y = e.clientY;
   const dx = e.clientX - t.x0, dy = e.clientY - t.y0;
@@ -144,12 +147,10 @@ addEventListener('keydown', (e) => {
     case 'KeyW': case 'ArrowUp': case 'Space': game.jump(); e.preventDefault(); break;
     case 'KeyS': case 'ArrowDown': case 'ControlLeft': game.slide(); break;
     case 'KeyQ': game.throwWeapon(pointer.x, pointer.y); break;
-    case 'KeyE': case 'KeyF': game.execute(); break;
     case 'Escape': toMenu(); break;
   }
 });
 document.getElementById('btn-throw').addEventListener('pointerdown', (e) => { e.stopPropagation(); game.throwWeapon(); });
-document.getElementById('btn-exec').addEventListener('pointerdown', (e) => { e.stopPropagation(); game.execute(); });
 
 // gamepad: left stick lanes, A jump, B slide, X throw, RT fire at screen center
 let gpPrev = {};
@@ -164,7 +165,6 @@ function pollGamepad() {
   if (edge('a', b(0))) game.jump();
   if (edge('b', b(1))) game.slide();
   if (edge('x', b(2))) game.throwWeapon();
-  if (edge('y', b(3))) game.execute();
   if (edge('rt', b(7))) game.fire(innerWidth / 2, innerHeight / 2);
 }
 
@@ -184,6 +184,7 @@ renderer.setAnimationLoop(() => {
     // machine-pistol: hold to spray
     if (pointer.down && WEAPONS[game.p.weapon].auto && !game.bulletTime) game.fire(pointer.x, pointer.y);
     for (const t of touches.values()) if (!t.swiped && WEAPONS[game.p.weapon].auto && performance.now() - t.t0 > 180) game.fire(t.x, t.y);
+    if (coarse && game.aim) { game.aim.x *= Math.exp(-dt * 2.5); game.aim.y *= Math.exp(-dt * 2.5); }
     game.update(dt);
     tutorial.update();
   } else if (!game.p || !game.p.dead) {

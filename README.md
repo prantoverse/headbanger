@@ -7,7 +7,7 @@
 - Shoot on the beat, go for headshots. Enemies die in one hit, and so do you (after your armor breaks).
 - Dodge lanes, jump, slide, and **wall run**. Bullets, barriers and rockets are all telegraphed to the music.
 - **No reloading.** When your gun runs dry, **throw it** at an enemy and steal their weapon.
-- Shoot a **yellow chrono canister** for bullet time: mark up to 4 enemies, then **EXECUTE**.
+- Shoot a **yellow chrono canister** for FOCUS: time slows, the music drops to half-time with a heartbeat, and every click is a free kill.
 - Shoot a **pink canister** for one ricochet round that chains through the crowd.
 - Four looping worlds: Neon Rooftops → Inside the Machine → Alien World → Orbital Station, each faster than the last.
 
@@ -19,9 +19,8 @@
 | Jump / wall run | W / Space | Swipe ↑ |
 | Slide | S | Swipe ↓ |
 | Throw weapon | Q / right-click | THROW button / two-finger tap |
-| Execute marks | E | EXECUTE button |
 
-Gamepad works too (stick, A, B, X, Y, RT). Haptics work on Android and gamepads (iOS Safari has no Vibration API).
+Gamepad works too (stick, A, B, X, RT). Haptics work on Android and gamepads (iOS Safari has no Vibration API).
 
 ## Dev
 ```bash
