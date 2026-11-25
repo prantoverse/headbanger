@@ -1,5 +1,7 @@
 # HEADBANGER
 
+**▶ Play: https://prantoverse.github.io/headbanger/**
+
 **Gun-fu × heavy metal × bullet time.** An endless rhythm-shooter runner in a Spider-Verse comic style, built with three.js. Plays in the browser on phone and PC.
 
 - Shoot on the beat, go for headshots. Enemies die in one hit, and so do you (after your armor breaks).
