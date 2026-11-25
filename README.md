@@ -11,7 +11,7 @@
 - **3 headshots in a row** charges FOCUS. Press **Q**: time slows, the music drops to half-time with a heartbeat, and every click is a free kill.
 - **6 in a row** also loads a ricochet round that chains through the crowd.
 - **HEAT** rises every 25 seconds: faster running, more goons per group, new goon types, more obstacles.
-- Giant oddities roll past in the background: a guard of honour of saluting knights, satellites, a sky-submarine, a flying sedan.
+- Fever-dream backdrop: Starry-Night swirl skies and painterly brushwork under the comic ink, giant mechs blasting off from the roadside, huge eyes in the sky that follow you and wink, sky traffic, a colossal flying submarine, satellites.
 - Four looping worlds: Neon Rooftops → Inside the Machine → Alien World → Orbital Station, each faster than the last.
 
 ## Controls

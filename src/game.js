@@ -379,12 +379,13 @@ export class Game {
     }
     const a = e.obj.userData.gun.getWorldPosition(this.tmpV2);
     const b = this.camera.position.clone(); b.y -= 0.25;
-    const dir = b.clone().sub(a); const len = Math.max(0.1, dir.length() - 1.6);
+    const dir = b.clone().sub(a); const full = dir.length(); const len = full - 5;
     dir.normalize();
+    if (len < 1) { e.laser.visible = false; return; }
     e.laser.visible = true;
     e.laser.position.copy(a).addScaledVector(dir, len / 2);
     e.laser.lookAt(b);
-    const w = 0.025 + (e.warn > 0 ? 0.03 : 0);
+    const w = 0.018 + (e.warn > 0 ? 0.02 : 0);
     e.laser.scale.set(w, w, len);
     e.laser.material.opacity = e.warn > 0 ? 0.9 : 0.22 + this.world.beatPulse * 0.15;
   }
@@ -518,9 +519,12 @@ export class Game {
   hurt(src) {
     const p = this.p;
     if (p.invuln > 0 || p.dead) return;
+    const CAUSE = { bullet: 'SHOT!', slash: 'SLASHED!', bump: 'BODY-CHECKED!', rocket: 'ROCKET!', barrier: 'BARRIER!' };
+    const label = CAUSE[src] || 'HIT!';
+    this.lastCause = label;
     if (this.mode === 'tutorial') {
       p.invuln = 0.6; this.audio.sfx('hurt'); this.hurtFx = 0.8; this.haptics(50);
-      this.ui.pop('OUCH! TRY AGAIN', innerWidth / 2, innerHeight * 0.55, '#ff1f3d', 38);
+      this.ui.pop(label + ' TRY AGAIN', innerWidth / 2, innerHeight * 0.55, '#ff1f3d', 38);
       this.emit('hurt', { src }); return;
     }
     this.audio.sfx('hurt'); this.haptics([60, 30, 90]);
@@ -528,7 +532,7 @@ export class Game {
     this.headStreak = 0; this.ui.setStreak(this.focusCharges ? 3 : 0, !!this.focusCharges);
     if (p.armor > 0) {
       p.armor = 0; p.regen = 7; p.invuln = 0.9; this.ui.setArmor(0);
-      this.ui.pop('ARMOR BROKEN', innerWidth / 2, innerHeight * 0.55, '#ff1f3d', 40);
+      this.ui.pop(label + ' ARMOR BROKEN', innerWidth / 2, innerHeight * 0.55, '#ff1f3d', 44, true);
     } else {
       p.dead = true; this.impact = 1; this.targetScale = 0.15;
       setTimeout(() => this.onGameOver && this.onGameOver(), 1100);
@@ -574,8 +578,7 @@ export class Game {
       if (type === 'sword' || r < 0.5) x = LANES[Math.floor(Math.random() * 3)];
       else {
         const side = Math.random() < 0.5 ? -1 : 1;
-        if (r < 0.75 && this.world.wallAt(this.p.z - zA, side)) { x = side * (WALL_X + 0.3); elev = 4.8; }
-        else x = side * 3.15;
+        x = side * 3.0; // corridor edge, always in front of the walls
       }
       const key = Math.round(x) + ':' + elev;
       if (used.has(key)) continue; used.add(key);
@@ -654,7 +657,7 @@ export class Game {
     for (const e of this.enemies) {
       if (!e.alive || !e.landed || e.passive) continue;
       const dz = this.p.z - e.obj.position.z;
-      if (dz < 8 || dz > 24 || !this.onScreen(e)) continue;
+      if (dz < 8 || dz > 24 || Math.abs(e.obj.position.x) > 3.3 || e.obj.position.y > 1 || !this.onScreen(e)) continue;
       if (inBeat === 3) e.warn = 0.2; // laser flares a 16th before the beat
       if (e.type === 'pistol' && inBeat === 0 && (this.heat >= 7 || (beatIdx + e.fireOffset) % 2 === 0)) this.enemyFire(e, 1);
       if (e.type === 'shotgun' && inBeat === 0 && beatIdx % 4 === (e.fireOffset ? 2 : 0) && dz < 30) this.enemyFire(e, 3);
@@ -812,7 +815,7 @@ export class Game {
         // collision with player
         if (e.landed && Math.abs(dz) < 0.9 && Math.abs(o.position.x - p.x) < 1.0 && e.baseY < 1 && bodyMin < 1.2 && !p.wall) {
           if (p.weapon === 'sword' || p.weapon === 'fists') this.killEnemy(e, 'body', { melee: true });
-          else { this.hurt(); e.alive = false; e.deadT = 0; e.vel = new THREE.Vector3(3, 3, 4); e.spin = new THREE.Vector3(3, 2, 1); }
+          else { this.hurt(e.type === 'sword' ? 'slash' : 'bump'); e.alive = false; e.deadT = 0; e.vel = new THREE.Vector3(3, 3, 4); e.spin = new THREE.Vector3(3, 2, 1); }
         }
         if (e.warn > 0) e.warn -= realDt;
         this.updateLaser(e, dz);
@@ -887,7 +890,7 @@ export class Game {
         const inLane = h.lanes.includes(lane) && !p.wall;
         const overlap = bodyMax > h.yMin && bodyMin < h.yMax;
         this.emit('hazard', { kind: h.kind, ok: !(inLane && overlap) });
-        if (inLane && overlap) this.hurt('hazard');
+        if (inLane && overlap) this.hurt(h.kind === 'dive' || h.kind === 'cross' ? 'rocket' : 'barrier');
         else if (h.kind !== 'lane') { this.addScore(30); this.ui.pop(h.kind === 'high' ? 'LIMBO!' : h.kind === 'low' ? 'VAULT!' : 'DODGED!', innerWidth / 2, innerHeight * 0.66, '#fff6e0', 28); }
         if (h.kind === 'cross' && h.rocket) { this.scene.remove(h.rocket); }
       }

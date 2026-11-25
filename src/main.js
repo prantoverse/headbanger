@@ -50,7 +50,7 @@ game.onGameOver = () => {
   const newBest = s > best;
   if (newBest) { best = s; try { localStorage.setItem('headbanger.best', String(best)); } catch (e) {} }
   document.getElementById('final').innerHTML =
-    `<b>${s.toLocaleString()}</b>${newBest ? 'NEW BEST!<br>' : ''}${st.kills} KILLS · ${st.heads} HEADSHOTS<br>${st.beats} ON THE BEAT · ${Math.round(st.dist)}m`;
+    `<b>${s.toLocaleString()}</b>${game.lastCause ? 'KILLED BY: ' + game.lastCause + '<br>' : ''}${newBest ? 'NEW BEST!<br>' : ''}${st.kills} KILLS · ${st.heads} HEADSHOTS<br>${st.beats} ON THE BEAT · ${Math.round(st.dist)}m`;
   ui.show('hud', false); ui.show('over', true); showBest();
 };
 
@@ -192,7 +192,7 @@ renderer.setAnimationLoop(() => {
     for (const t of touches.values()) if (!t.swiped && WEAPONS[game.p.weapon].auto && performance.now() - t.t0 > 180) game.fire(t.x, t.y);
     if (coarse && game.aim) { game.aim.x *= Math.exp(-dt * 2.5); game.aim.y *= Math.exp(-dt * 2.5); }
     game.update(dt);
-    setpieces.update(game.p.z, dt * game.timeScale, audio.songPos, world.beatPulse);
+    setpieces.update(game.p.z, dt * game.timeScale, audio.songPos, world.beatPulse, game.p.x);
     tutorial.update();
   } else if (!game.p || !game.p.dead) {
     // menu attract: glide through the world

@@ -33,22 +33,22 @@ function mesh(geo, mat, x, y, z, sx = 1, sy = 1, sz = 1) {
 
 export const BIOMES = [
   {
-    name: 'NEON ROOFTOPS', skyTop: 0x2a0a5e, skyBot: 0xff4f9a, fog: 0xb03a8a,
+    name: 'NEON ROOFTOPS', skyAccent: 0xffd23a, skyTop: 0x2a0a5e, skyBot: 0xff4f9a, fog: 0xb03a8a,
     floor: 0x5a3a9a, floor2: 0x6e48b8, wall: 0x4a2a80, accents: [0xff2e88, 0x00e5ff, 0xffe600],
     sun: 0xffd3f0, hemiSky: 0x7a5cff, hemiGround: 0x5a2a80,
   },
   {
-    name: 'INSIDE THE MACHINE', skyTop: 0x3a1a00, skyBot: 0xffa030, fog: 0xa85a10,
+    name: 'INSIDE THE MACHINE', skyAccent: 0xfff0a0, skyTop: 0x3a1a00, skyBot: 0xffa030, fog: 0xa85a10,
     floor: 0x6a4a3a, floor2: 0x80584a, wall: 0x5a3d2a, accents: [0xff7a00, 0x00ffc8, 0xffe600],
     sun: 0xffe2b0, hemiSky: 0xff9a3c, hemiGround: 0x5a3010,
   },
   {
-    name: 'ALIEN WORLD', skyTop: 0x0a3a30, skyBot: 0xb8ff5a, fog: 0x3d8a4a,
+    name: 'ALIEN WORLD', skyAccent: 0xff6ad5, skyTop: 0x0a3a30, skyBot: 0xb8ff5a, fog: 0x3d8a4a,
     floor: 0x6a3a9a, floor2: 0x8048b8, wall: 0x4a2a70, accents: [0x9dff3c, 0xff2e88, 0x00e5ff],
     sun: 0xe9ffd0, hemiSky: 0x9dff3c, hemiGround: 0x4a2a6a,
   },
   {
-    name: 'ORBITAL STATION', skyTop: 0x02021a, skyBot: 0x3a5cff, fog: 0x2a3a90,
+    name: 'ORBITAL STATION', skyAccent: 0xffe600, skyTop: 0x02021a, skyBot: 0x3a5cff, fog: 0x2a3a90,
     floor: 0xc8d0e0, floor2: 0x9aa4bc, wall: 0xe8ecf4, accents: [0xff1f3d, 0x00e5ff, 0xffe600],
     sun: 0xffffff, hemiSky: 0x9fc4ff, hemiGround: 0x30305a,
   },
@@ -67,20 +67,45 @@ export class World {
     this.clearZones = [];
 
     // sky dome
-    this.skyU = { top: { value: new THREE.Color(BIOMES[0].skyTop) }, bot: { value: new THREE.Color(BIOMES[0].skyBot) }, time: { value: 0 }, stars: { value: 0.3 } };
+    this.skyU = { top: { value: new THREE.Color(BIOMES[0].skyTop) }, bot: { value: new THREE.Color(BIOMES[0].skyBot) }, accent: { value: new THREE.Color(BIOMES[0].skyAccent) }, time: { value: 0 }, stars: { value: 1 } };
     const sky = new THREE.Mesh(new THREE.SphereGeometry(420, 32, 16), new THREE.ShaderMaterial({
       side: THREE.BackSide, depthWrite: false, fog: false, uniforms: this.skyU,
       vertexShader: `varying vec3 vP; void main(){ vP = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
-      fragmentShader: `uniform vec3 top, bot; uniform float time, stars; varying vec3 vP;
-        float h(vec3 p){ return fract(sin(dot(p, vec3(12.9898,78.233,37.719)))*43758.5453); }
+      fragmentShader: `uniform vec3 top, bot, accent; uniform float time, stars; varying vec3 vP;
+        float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+        float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
+          return mix(mix(h2(i), h2(i+vec2(1,0)), f.x), mix(h2(i+vec2(0,1)), h2(i+vec2(1,1)), f.x), f.y); }
+        float fbm(vec2 p){ float a = 0.5, s = 0.0; for (int i = 0; i < 4; i++){ s += a * vn(p); p = p * 2.03 + 7.1; a *= 0.5; } return s; }
+        vec2 swirl(vec2 p, vec2 c, float r, float k){ vec2 d = p - c; float l = length(d); float a = k * exp(-l*l/(r*r)); float s = sin(a), co = cos(a); return c + mat2(co, -s, s, co) * d; }
         void main(){
-          float t = smoothstep(-0.15, 0.55, vP.y);
+          vec2 p = vec2(atan(vP.x, -vP.z), vP.y * 2.2);
+          // Starry-Night vortices
+          vec2 q = p * 1.5;
+          q = swirl(q, vec2(0.0, 1.2), 0.6, 3.2 + sin(time * 0.25) * 0.6);
+          q = swirl(q, vec2(1.4, 0.8), 0.45, -2.6);
+          q = swirl(q, vec2(-1.3, 1.5), 0.5, 2.9);
+          q = swirl(q, vec2(2.6, 1.6), 0.5, -3.0);
+          q.x += time * 0.025;
+          float n = fbm(q * 2.2 + fbm(q * 1.4 + time * 0.03) * 1.6);
+          // directional brush ridges that follow the swirl
+          float ridge = sin(q.y * 26.0 + n * 14.0) * 0.5 + 0.5;
+          float strokeId = h2(floor(vec2(q.x * 9.0 + n * 3.0, q.y * 30.0 + n * 5.0)));
+          float t = smoothstep(-0.2, 0.6, vP.y) + (n - 0.5) * 0.5;
+          t = floor(clamp(t, 0.0, 1.0) * 7.0) / 7.0;
           vec3 c = mix(bot, top, t);
-          // banded comic gradient
-          c = mix(bot, top, floor(t * 6.0) / 6.0);
-          vec3 q = floor(vP * 220.0);
-          float s = step(1.0 - 0.006 * stars, h(q)) * smoothstep(0.0, 0.4, vP.y);
-          c += s * 0.9;
+          float sw = smoothstep(0.55, 0.78, n) * smoothstep(-0.15, 0.35, vP.y);
+          c = mix(c, accent, sw * 0.6);
+          c *= 0.82 + ridge * 0.22 + (strokeId - 0.5) * 0.12;
+          // big haloed stars with pulsing rings
+          vec2 sg = p * vec2(4.0, 3.2); vec2 cell = floor(sg); vec2 f = fract(sg) - 0.5;
+          float rnd = h2(cell);
+          if (rnd > 1.0 - 0.1 * stars && vP.y > 0.05) {
+            vec2 o = vec2(h2(cell + 3.1), h2(cell + 7.7)) - 0.5;
+            float d = length(f - o * 0.4);
+            float core = smoothstep(0.07, 0.0, d);
+            float rings = (sin(d * 70.0 - time * 2.5) * 0.5 + 0.5) * smoothstep(0.38, 0.06, d);
+            c = mix(c, vec3(1.0, 0.95, 0.55), clamp(core + rings * 0.5, 0.0, 1.0));
+          }
           gl_FragColor = vec4(c, 1.0);
         }`,
     }));
@@ -118,7 +143,7 @@ export class World {
     const b = BIOMES[0];
     this.backdrops.forEach((g, i) => (g.visible = i === 0));
     this.fogTarget.set(b.fog); this.scene.fog.color.set(b.fog);
-    this.skyU.top.value.set(b.skyTop); this.skyU.bot.value.set(b.skyBot); this.skyU.stars.value = 0.3;
+    this.skyU.top.value.set(b.skyTop); this.skyU.bot.value.set(b.skyBot); this.skyU.accent.value.set(b.skyAccent); this.skyU.stars.value = 1;
     this.hemi.color.set(b.hemiSky); this.hemi.groundColor.set(b.hemiGround); this.sun.color.set(b.sun);
   }
 
@@ -148,8 +173,8 @@ export class World {
       const b = BIOMES[this.biome];
       this.backdrops.forEach((g, i) => (g.visible = i === this.biome));
       this.fogTarget.set(b.fog);
-      this.skyU.top.value.set(b.skyTop); this.skyU.bot.value.set(b.skyBot);
-      this.skyU.stars.value = this.biome === 3 ? 3 : this.biome === 2 ? 1.2 : 0.3;
+      this.skyU.top.value.set(b.skyTop); this.skyU.bot.value.set(b.skyBot); this.skyU.accent.value.set(b.skyAccent);
+      this.skyU.stars.value = this.biome === 3 ? 2.5 : 1.2;
       this.hemi.color.set(b.hemiSky); this.hemi.groundColor.set(b.hemiGround); this.sun.color.set(b.sun);
     }
     this.scene.fog.color.lerp(this.fogTarget, 1 - Math.exp(-dt * 3));

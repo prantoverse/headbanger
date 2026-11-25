@@ -12,7 +12,7 @@ precision highp float;
 uniform sampler2D tColor;
 uniform sampler2D tDepth;
 uniform vec2 res;
-uniform float time, slow, impact, shift, speed, near, far, dotScale, hurt;
+uniform float time, slow, impact, shift, speed, near, far, dotScale, hurt, paint;
 uniform vec3 inkCol, paperCol, shadowTint;
 varying vec2 vUv;
 
@@ -22,6 +22,8 @@ float linDepth(vec2 uv){
 }
 float luma(vec3 c){ return dot(c, vec3(0.299, 0.587, 0.114)); }
 float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233))) * 43758.5453); }
+float vnz(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
+  return mix(mix(hash(i), hash(i+vec2(1,0)), f.x), mix(hash(i+vec2(0,1)), hash(i+vec2(1,1)), f.x), f.y); }
 vec3 srgb(vec3 c){ return pow(max(c, 0.0), vec3(1.0/2.2)); }
 
 void main(){
@@ -32,10 +34,23 @@ void main(){
   vec2 dir = normalize(vec2(1.0, 0.6));
   float off = shift;
   vec3 col;
-  col.r = texture2D(tColor, uv + dir * off * px).r;
-  col.g = texture2D(tColor, uv).g;
-  col.b = texture2D(tColor, uv - dir * off * px).b;
+  // --- Van Gogh brushwork: smear colour along a swirling flow field, then stroke texture
+  float fa = vnz(uv * vec2(5.0, 3.0) + vec2(time * 0.04, 0.0)) * 6.2831 + vnz(uv * 11.0) * 2.0;
+  vec2 fd = vec2(cos(fa), sin(fa));
+  vec2 sd = fd * px * 2.6 * paint;
+  vec3 bc = texture2D(tColor, uv).rgb * 0.28
+          + (texture2D(tColor, uv + sd).rgb + texture2D(tColor, uv - sd).rgb) * 0.22
+          + (texture2D(tColor, uv + sd * 2.2).rgb + texture2D(tColor, uv - sd * 2.2).rgb) * 0.14;
+  col = bc;
+  // print misregistration on top
+  col.r = mix(col.r, texture2D(tColor, uv + dir * off * px).r, 0.6);
+  col.b = mix(col.b, texture2D(tColor, uv - dir * off * px).b, 0.6);
   col = srgb(col);
+  vec2 fc = gl_FragCoord.xy;
+  vec2 fp = vec2(-fd.y, fd.x);
+  float sid = hash(vec2(floor(dot(fc, fp) / 3.2), floor(dot(fc, fd) / 16.0)));
+  float ridge = sin(dot(fc, fp) * 1.9) * 0.5 + 0.5;
+  col *= 1.0 + ((sid - 0.5) * 0.14 + (ridge - 0.5) * 0.06) * paint;
 
   // --- ink outlines: depth sobel + color sobel ---
   float d0 = linDepth(uv);
@@ -116,7 +131,7 @@ export class ComicPost {
       uniforms: {
         tColor: { value: this.rt.texture }, tDepth: { value: this.rt.depthTexture },
         res: { value: size.clone() }, time: { value: 0 }, slow: { value: 0 }, impact: { value: 0 },
-        shift: { value: 1.5 }, speed: { value: 0 }, hurt: { value: 0 },
+        shift: { value: 1.5 }, speed: { value: 0 }, hurt: { value: 0 }, paint: { value: 1 },
         near: { value: camera.near }, far: { value: camera.far },
         dotScale: { value: 5.0 * Math.max(1, renderer.getPixelRatio()) },
         inkCol: { value: new THREE.Color(0x0b0410) },
