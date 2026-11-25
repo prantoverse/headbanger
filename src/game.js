@@ -622,14 +622,22 @@ export class Game {
       h.lanes = [lane]; h.yMin = 0; h.yMax = 3;
       const warn = box(red, 2, 0.03, 10, LANES[lane], 0.04, 4); warn.material = red; g.add(warn); h.warn = warn;
       const rocket = new THREE.Group();
-      rocket.add(box(toon(0xfff6e0), 0.35, 1.3, 0.35), box(red, 0.37, 0.4, 0.37, 0, 0.5, 0), box(flat(0xff7a00), 0.25, 0.7, 0.25, 0, -0.95, 0));
+      rocket.add(box(toon(0xfff6e0), 0.85, 2.2, 0.85), box(red, 0.9, 0.6, 0.9, 0, 1.1, 0), box(flat(0xffe600), 0.6, 1.6, 0.6, 0, 1.9, 0), box(flat(0xff7a00), 0.45, 1.2, 0.45, 0, 2.9, 0));
+      rocket.rotation.x = Math.PI; // nose down
+      const pillar = new THREE.Mesh(BOX, new THREE.MeshBasicMaterial({ color: 0xff1f3d, transparent: true, opacity: 0.25, depthWrite: false }));
+      pillar.scale.set(2, 6, 0.6); pillar.position.set(LANES[lane], 3, 0); g.add(pillar); h.pillar = pillar;
       rocket.position.set(LANES[lane] + 8, 18, -6); g.add(rocket); h.rocket = rocket; h.lane = lane; h.armed = true;
     } else if (kind === 'cross') { // rocket flying across from the right at chest height -> slide/jump
       h.lanes = [0, 1, 2]; h.yMin = 0.9; h.yMax = 1.7;
       const rocket = new THREE.Group();
-      rocket.add(box(toon(0xfff6e0), 1.3, 0.35, 0.35), box(red, 0.4, 0.37, 0.37, -0.5, 0, 0), box(flat(0xff7a00), 0.7, 0.25, 0.25, 0.95, 0, 0));
-      rocket.position.set(30, 1.3, 0); g.add(rocket); h.rocket = rocket; h.armed = true;
-      const warn = box(red, 7.4, 0.04, 0.6, 0, 1.3, 0); g.add(warn); h.warn = warn;
+      rocket.add(box(toon(0xfff6e0), 2.2, 0.85, 0.85), box(red, 0.6, 0.9, 0.9, -1.2, 0, 0), box(flat(0xffe600), 0.15, 0.95, 0.95, -0.4, 0, 0));
+      for (let f = 0; f < 3; f++) rocket.add(box(flat(f ? 0xff7a00 : 0xffe600), 1.4 + f * 0.9, 0.6 - f * 0.12, 0.6 - f * 0.12, 1.8 + f * 0.6, 0, 0)); // flame trail
+      rocket.position.set(18, 1.3, 0); g.add(rocket); h.rocket = rocket; h.armed = true;
+      const bandMat = new THREE.MeshBasicMaterial({ color: 0xff1f3d, transparent: true, opacity: 0.35, depthWrite: false });
+      const warn = new THREE.Group();
+      warn.add(new THREE.Mesh(BOX, bandMat).translateY(1.3)); warn.children[0].scale.set(7.4, 0.8, 0.15); // the exact hit height
+      warn.add(box(red, 7.4, 0.06, 0.2, 0, 0.9, 0), box(red, 7.4, 0.06, 0.2, 0, 1.7, 0));
+      g.add(warn); h.warn = warn;
     }
     this.scene.add(g); this.hazards.push(h); return h;
   }
@@ -874,13 +882,15 @@ export class Game {
           h.rocket.position.set(LANES[h.lane] + 8 * (1 - k), 18 * (1 - k) + 1.2, -6 * (1 - k));
           h.rocket.rotation.z = 0.4 * (1 - k);
           if (h.warn) h.warn.visible = Math.floor(this.time * 10) % 2 === 0;
+          if (h.pillar) h.pillar.visible = h.warn.visible;
           if (timeToReach < 1.6 && !h.warned) { h.warned = true; this.audio.sfx('warn'); }
           if (k >= 1) { h.armed = false; this.explode(h, new THREE.Vector3(LANES[h.lane], 0.8, h.obj.position.z)); }
         } else {
-          const k = Math.max(0, Math.min(1, 1 - timeToReach / 1.2));
-          h.rocket.position.x = 30 * (1 - k) - 2 * k;
+          const k = Math.max(0, Math.min(1, 1 - timeToReach / 1.4));
+          h.rocket.position.x = 18 * (1 - k) - 2 * k;
+          h.rocket.children.forEach((c, j) => { if (j >= 3) c.scale.y = c.scale.z = (0.5 - (j - 3) * 0.1) * (0.7 + Math.random() * 0.6); });
           if (h.warn) h.warn.visible = Math.floor(this.time * 10) % 2 === 0;
-          if (timeToReach < 1.2 && !h.warned) { h.warned = true; this.audio.sfx('warn'); }
+          if (timeToReach < 1.4 && !h.warned) { h.warned = true; this.audio.sfx('warn'); }
           if (k >= 1) h.armed = false;
         }
       }
@@ -892,7 +902,7 @@ export class Game {
         this.emit('hazard', { kind: h.kind, ok: !(inLane && overlap) });
         if (inLane && overlap) this.hurt(h.kind === 'dive' || h.kind === 'cross' ? 'rocket' : 'barrier');
         else if (h.kind !== 'lane') { this.addScore(30); this.ui.pop(h.kind === 'high' ? 'LIMBO!' : h.kind === 'low' ? 'VAULT!' : 'DODGED!', innerWidth / 2, innerHeight * 0.66, '#fff6e0', 28); }
-        if (h.kind === 'cross' && h.rocket) { this.scene.remove(h.rocket); }
+        if (h.kind === 'cross') { if (h.rocket) h.obj.remove(h.rocket); if (h.warn) h.obj.remove(h.warn); }
       }
       if (dz < -10) { this.scene.remove(h.obj); this.hazards.splice(i, 1); }
     }
@@ -959,6 +969,8 @@ export class Game {
     const touchUI = matchMedia('(pointer:coarse)').matches;
     if (!p.dead) {
       if (this.bulletTime) al = ['focus', 'FOCUS', touchUI ? 'TAP THE GOONS' : 'CLICK THE GOONS', '#00e5ff', true];
+      else if (this.hazards.some((h) => h.kind === 'cross' && h.armed && (p.z - h.obj.position.z) / this.speed < 1.5 && p.z - h.obj.position.z > 0)) al = ['rocketX', 'ROCKET!', touchUI ? 'SWIPE ↓ SLIDE  or  ↑ JUMP' : 'SLIDE ↓  or  JUMP ↑', '#ff7a00'];
+      else if (this.hazards.some((h) => h.kind === 'dive' && h.armed && (p.z - h.obj.position.z) / this.speed < 1.6 && p.z - h.obj.position.z > 0)) al = ['rocketD', 'ROCKET!', 'CHANGE LANE', '#ff7a00'];
       else if (p.ammo <= 0 && !WEAPONS[p.weapon].melee) al = ['throw', 'THROW YOUR GUN!', touchUI ? 'HIT  THROW' : 'PRESS  F  /  RIGHT-CLICK', '#ff1f3d'];
       else if (p.weapon === 'fists') al = ['grab', 'GRAB A GUN!', touchUI ? 'TAP A DROPPED GUN · PUNCH UP CLOSE' : 'CLICK A DROPPED GUN · PUNCH UP CLOSE', '#ffe600'];
     }
@@ -979,6 +991,7 @@ export class Game {
     this.audio.sfx('boom'); this.spray(pos, 0xff7a00, 20, 9); this.spray(pos, 0xffe600, 12, 7); this.spray(pos, 0x0b0410, 8, 5);
     if (h.rocket) h.obj.remove(h.rocket);
     if (h.warn) h.obj.remove(h.warn);
+    if (h.pillar) h.obj.remove(h.pillar);
     const s = this.toScreen(pos); this.ui.pop('KABOOM!', s.x, s.y, '#ff7a00', 64, true);
     this.post.u.shift.value = 9; this.haptics(70);
   }
