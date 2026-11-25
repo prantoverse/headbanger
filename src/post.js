@@ -1,6 +1,6 @@
 // Spider-Verse style comic post pipeline:
 // scene -> RT (color + depth) -> fullscreen shader: ink outlines (depth+color sobel),
-// halftone shadows, CMY misregistration, speed lines, slow-mo duotone, impact frames, paper grain.
+// CMY misregistration, speed lines, slow-mo duotone, impact frames, soft vignette.
 import * as THREE from 'three';
 
 const vert = /* glsl */`
@@ -54,20 +54,7 @@ void main(){
   float fade = 1.0 - smoothstep(far * 0.45, far * 0.95, d0); // distant stuff gets thinner ink
   float edge = max(smoothstep(0.10, 0.22, dEdge), smoothstep(0.20, 0.42, cEdge) * 0.85) * fade;
 
-  // --- halftone in shadows (rotated dot grid) ---
   float L = luma(col);
-  float cell = dotScale * (1.0 + slow * 0.8);
-  mat2 rot = mat2(0.7071, -0.7071, 0.7071, 0.7071);
-  vec2 g = rot * (gl_FragCoord.xy) / cell;
-  vec2 gc = fract(g) - 0.5;
-  float r = clamp((0.62 - L) * 1.25, 0.0, 0.72);
-  float dotMask = 1.0 - smoothstep(r - 0.06, r + 0.02, length(gc));
-  col = mix(col, col * shadowTint, dotMask * 0.42);
-  // light highlight dots (Ben-Day) in bright areas
-  vec2 g2 = rot * (gl_FragCoord.xy + 3.0) / (cell * 0.75);
-  float hr = clamp((L - 0.72) * 0.9, 0.0, 0.35);
-  float hiMask = 1.0 - smoothstep(hr - 0.05, hr + 0.02, length(fract(g2) - 0.5));
-  col = mix(col, paperCol, hiMask * 0.12);
 
   // --- posterize slightly ---
   col = floor(col * 7.0 + 0.5) / 7.0 * 0.35 + col * 0.65;
@@ -89,7 +76,8 @@ void main(){
   col = mix(col, slow > 0.2 ? vec3(0.0, 0.9, 1.0) : paperCol, lineMask * 0.28);
 
   // vignette + hurt
-  col *= 1.0 - smoothstep(0.55, 1.05, rad) * (0.35 + slow * 0.4);
+  // soft vignette
+  col *= 1.0 - smoothstep(0.42, 0.95, rad) * (0.42 + slow * 0.3);
   col = mix(col, vec3(1.0, 0.1, 0.25), hurt * smoothstep(0.3, 0.9, rad) * 0.8);
 
   // --- impact frame: hard threshold black / white / red ---
@@ -100,8 +88,6 @@ void main(){
     col = mix(col, imp, impact);
   }
 
-  // paper grain
-  col += (hash(gl_FragCoord.xy) - 0.5) * 0.012; // static, barely-there paper tooth
 
   gl_FragColor = vec4(col, 1.0);
 }`;
