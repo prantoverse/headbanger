@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+  <meta name="theme-color" content="#14061f" />
+  <title>HEADBANGER — gun-fu rhythm runner</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <canvas id="c"></canvas>
+
+  <div id="hud" class="hidden">
+    <div id="score-box">
+      <div id="score">0</div>
+      <div id="combo">x1</div>
+    </div>
+    <div id="armor"><span></span></div>
+    <div id="biome-name"></div>
+    <div id="weapon-box">
+      <div id="weapon-name">PISTOL</div>
+      <div id="ammo"></div>
+      <div id="throw-hint">THROW IT!</div>
+    </div>
+    <div id="focus-bar"><div></div><span>FOCUS</span></div>
+    <div id="marks-hint">TAP TO MARK · <b>EXECUTE</b></div>
+    <div id="beat-ring"></div>
+    <div id="crosshair"></div>
+    <div id="pops"></div>
+    <div id="touch-ui">
+      <button id="btn-throw">THROW</button>
+      <button id="btn-exec">EXECUTE</button>
+    </div>
+  </div>
+
+  <div id="menu" class="screen">
+    <div class="panel">
+      <h1 id="title">HEAD<span>BANGER</span></h1>
+      <p class="tag">gun-fu · heavy metal · bullet time</p>
+      <button id="btn-play">PLAY</button>
+      <div class="how">
+        <div><b>SHOOT</b> click / tap enemies — <i>headshots + on the beat</i> score big</div>
+        <div><b>DODGE</b> A / D or swipe ← → &nbsp;·&nbsp; <b>JUMP</b> W / Space / swipe ↑ &nbsp;·&nbsp; <b>SLIDE</b> S / swipe ↓</div>
+        <div><b>WALL RUN</b> jump while on an outer lane next to a wall</div>
+        <div><b>EMPTY?</b> <b>THROW</b> your gun (Q / right-click / button) — hit an enemy to steal their weapon</div>
+        <div><b>BULLET TIME</b> shoot <span class="y">yellow canisters</span>, mark up to 4 enemies, <b>EXECUTE</b> (E / button)</div>
+        <div><span class="m">Pink canisters</span> = one ricochet round</div>
+      </div>
+      <p class="best" id="best"></p>
+    </div>
+  </div>
+
+  <div id="over" class="screen hidden">
+    <div class="panel">
+      <h2>WASTED</h2>
+      <div id="final"></div>
+      <button id="btn-again">AGAIN</button>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
