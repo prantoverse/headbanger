@@ -94,6 +94,7 @@ export class Game {
 
   // ------------------------------------------------------------ lifecycle
   reset() {
+    for (const e of this.enemies || []) if (e.laser) this.scene.remove(e.laser);
     for (const list of [this.enemies, this.bullets, this.hazards, this.pickups, this.thrown, this.tracers]) if (list) for (const o of list) this.scene.remove(o.obj || o.mesh || o);
     for (const p of this.particles) { this.scene.remove(p.m); this.partPool.put(p.m); }
     this.enemies = []; this.bullets = []; this.hazards = []; this.pickups = []; this.thrown = []; this.tracers = []; this.particles = [];
@@ -364,6 +365,29 @@ export class Game {
 
   // ------------------------------------------------------------ combat helpers
   muzzlePos() { return (this.vm || this.camera).localToWorld(new THREE.Vector3(0, 0.06, -0.4)); }
+  onScreen(e) {
+    this.tmpV.copy(e.obj.position); this.tmpV.y += 1.3; this.tmpV.project(this.camera);
+    return this.tmpV.z < 1 && Math.abs(this.tmpV.x) < 0.95 && Math.abs(this.tmpV.y) < 0.95;
+  }
+  // red Superhot laser sight from a goon's gun to you; flares right before the shot
+  updateLaser(e, dz) {
+    const armed = e.alive && e.landed && !e.passive && e.type !== 'sword' && dz > 8 && dz < 40 && this.onScreen(e) && !this.bulletTime;
+    if (!armed) { if (e.laser) e.laser.visible = false; return; }
+    if (!e.laser) {
+      e.laser = new THREE.Mesh(BOX, new THREE.MeshBasicMaterial({ color: 0xff1f3d, transparent: true, opacity: 0.3, depthWrite: false, fog: false }));
+      this.scene.add(e.laser);
+    }
+    const a = e.obj.userData.gun.getWorldPosition(this.tmpV2);
+    const b = this.camera.position.clone(); b.y -= 0.25;
+    const dir = b.clone().sub(a); const len = Math.max(0.1, dir.length() - 1.6);
+    dir.normalize();
+    e.laser.visible = true;
+    e.laser.position.copy(a).addScaledVector(dir, len / 2);
+    e.laser.lookAt(b);
+    const w = 0.025 + (e.warn > 0 ? 0.03 : 0);
+    e.laser.scale.set(w, w, len);
+    e.laser.material.opacity = e.warn > 0 ? 0.9 : 0.22 + this.world.beatPulse * 0.15;
+  }
   setAim(sx, sy) { this.aim.x = (sx / innerWidth) * 2 - 1; this.aim.y = -(sy / innerHeight) * 2 + 1; }
   vmKick(k) { this.p.kick = Math.min(1.2, this.p.kick + k); }
   toScreen(v) { const s = v.clone().project(this.camera); return { x: (s.x + 1) / 2 * innerWidth, y: (1 - s.y) / 2 * innerHeight }; }
@@ -441,6 +465,7 @@ export class Game {
       }
     }
     this.scene.remove(o); e.shattered = true;
+    if (e.laser) { this.scene.remove(e.laser); e.laser = null; }
     while (this.shards.length > 450) { const old = this.shards.shift(); this.scene.remove(old.m); }
   }
 
@@ -529,19 +554,27 @@ export class Game {
     if (bar > 3) pool.push('smg');
     if (bar > 7) pool.push('sword', 'pistol');
     if (bar > 11) pool.push('shotgun');
-    const n = bar < 1 ? 1 : 2 + Math.floor(Math.random() * (1.2 + diff * 2.4));
-    const zBase = 46 + this.speed * 1.2;
+    // gentle ramp: 1 goon early, up to 3 per bar later, never more than 5 alive ahead
+    const ahead = this.enemies.filter((e) => e.alive && this.p.z - e.obj.position.z > 0).length;
+    const want = bar < 3 ? 1 : 1 + Math.floor(Math.random() * (1.3 + diff * 1.7));
+    const n = Math.max(0, Math.min(want, 5 - ahead));
+    const zBase = 40 + this.speed * 1.0;
     const used = new Set();
     for (let i = 0; i < n; i++) {
       const type = pool[Math.floor(Math.random() * pool.length)];
+      const zA = zBase + i * 5 + Math.random() * 4;
       let x, elev = 0;
       const r = Math.random();
-      if (type === 'sword') x = LANES[Math.floor(Math.random() * 3)];
-      else if (r < 0.45) { x = (Math.random() < 0.5 ? -1 : 1) * (WALL_X + 1.6 + Math.random() * 2); elev = Math.random() < 0.5 ? 2.5 : 0.6; }
-      else x = LANES[Math.floor(Math.random() * 3)];
-      const key = Math.round(x);
-      if (used.has(key)) x += 1.1; used.add(key);
-      this.spawnEnemy(type, x, zBase + i * 4 + Math.random() * 6, barBeat + 1 + (i % 3), elev);
+      // only spots you can actually see: a lane, the corridor edge, or on top of a wall
+      if (type === 'sword' || r < 0.5) x = LANES[Math.floor(Math.random() * 3)];
+      else {
+        const side = Math.random() < 0.5 ? -1 : 1;
+        if (r < 0.75 && this.world.wallAt(this.p.z - zA, side)) { x = side * (WALL_X + 0.3); elev = 4.8; }
+        else x = side * 3.15;
+      }
+      const key = Math.round(x) + ':' + elev;
+      if (used.has(key)) continue; used.add(key);
+      this.spawnEnemy(type, x, zA, barBeat + 1 + (i % 3), elev);
     }
     // hazards
     if (bar > 2 && bar % 2 === 0 && Math.random() < 0.55 + diff * 0.3) this.spawnHazard(zBase + 14);
@@ -616,7 +649,8 @@ export class Game {
     for (const e of this.enemies) {
       if (!e.alive || !e.landed || e.passive) continue;
       const dz = this.p.z - e.obj.position.z;
-      if (dz < 7 || dz > 48) continue;
+      if (dz < 8 || dz > 40 || !this.onScreen(e)) continue;
+      if (inBeat === 3) e.warn = 0.2; // laser flares a 16th before the beat
       if (e.type === 'pistol' && inBeat === 0 && (beatIdx + e.fireOffset) % 2 === 0) this.enemyFire(e, 1);
       if (e.type === 'shotgun' && inBeat === 0 && beatIdx % 4 === (e.fireOffset ? 2 : 0) && dz < 30) this.enemyFire(e, 3);
       if (e.type === 'smg' && (e.tut ? beatIdx % 2 === 0 : beatIdx % 4 === 2 + e.fireOffset) && inBeat < 3) this.enemyFire(e, 1);
@@ -626,6 +660,7 @@ export class Game {
 
   enemyFire(e, pellets) {
     const p = this.p;
+    e.warn = 0.18;
     const muzzle = e.obj.userData.gun.getWorldPosition(new THREE.Vector3());
     const T = 2 * BEAT; // game-time travel: lands two beats later
     const targetZ = p.z - this.speed * T;
@@ -635,8 +670,8 @@ export class Game {
       const target = new THREE.Vector3(lx, ty, targetZ);
       const vel = target.clone().sub(muzzle).divideScalar(T);
       const m = new THREE.Group();
-      const core = new THREE.Mesh(SPH, flat(0xfff6e0)); core.scale.set(0.11, 0.11, 0.11);
-      const trail = new THREE.Mesh(BOX, flat(0xff1f3d)); trail.scale.set(0.06, 0.06, 0.9); trail.position.z = -0.45;
+      const core = new THREE.Mesh(SPH, flat(0xfff6e0)); core.scale.set(0.16, 0.16, 0.16);
+      const trail = new THREE.Mesh(BOX, flat(0xff1f3d)); trail.scale.set(0.09, 0.09, 1.4); trail.position.z = -0.7;
       const tg = new THREE.Group(); tg.add(core, trail); m.add(tg);
       m.position.copy(muzzle); tg.lookAt(muzzle.clone().sub(vel)); // trail points back along path
       this.scene.add(m);
@@ -766,10 +801,13 @@ export class Game {
           if (p.weapon === 'sword' || p.weapon === 'fists') this.killEnemy(e, 'body', { melee: true });
           else { this.hurt(); e.alive = false; e.deadT = 0; e.vel = new THREE.Vector3(3, 3, 4); e.spin = new THREE.Vector3(3, 2, 1); }
         }
-        if (dz < -6) { this.scene.remove(o); this.enemies.splice(i, 1); }
+        if (e.warn > 0) e.warn -= realDt;
+        this.updateLaser(e, dz);
+        if (dz < -6) { this.scene.remove(o); if (e.laser) this.scene.remove(e.laser); this.enemies.splice(i, 1); }
       } else if (e.shattered) {
         this.enemies.splice(i, 1);
       } else {
+        if (e.laser) { this.scene.remove(e.laser); e.laser = null; }
         e.deadT += dt;
         e.vel.y -= 18 * dt;
         o.position.addScaledVector(e.vel, dt);
