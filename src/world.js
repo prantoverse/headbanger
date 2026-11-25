@@ -64,6 +64,7 @@ export class World {
     this.pendingBiome = 0;
     this.animated = [];
     this.beatPulse = 0;
+    this.clearZones = [];
 
     // sky dome
     this.skyU = { top: { value: new THREE.Color(BIOMES[0].skyTop) }, bot: { value: new THREE.Color(BIOMES[0].skyBot) }, time: { value: 0 }, stars: { value: 0.3 } };
@@ -111,7 +112,7 @@ export class World {
 
   reset() {
     for (const c of this.chunks) this.scene.remove(c.group);
-    this.chunks = []; this.animated = []; this.nextZ = 8;
+    this.chunks = []; this.animated = []; this.nextZ = 8; this.clearZones = [];
     if (this.portal) { this.scene.remove(this.portal); this.portal = null; }
     this.portalZ = -Infinity; this.pendingBiome = 0; this.biome = 0;
     const b = BIOMES[0];
@@ -206,7 +207,9 @@ export class World {
       }
     }
 
-    // biome scenery
+    // biome scenery (skipped where a giant set piece needs open sky)
+    const clear = this.clearZones.some(([a, b2]) => zc > a && zc < b2);
+    if (clear) { this.scene.add(g); this.chunks.push(c); this.nextZ -= CHUNK; return; }
     if (bi === 0) this.cityProps(g, zc, b, acc, anim, idx);
     if (bi === 1) this.machineProps(g, zc, b, acc, anim, idx);
     if (bi === 2) this.alienProps(g, zc, b, acc, anim, idx);

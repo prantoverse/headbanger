@@ -111,7 +111,7 @@ export class Game {
     this.timeScale = 1; this.targetScale = 1;
     this.focus = 0;             // seconds of bullet time remaining (real)
     this.bulletTime = false; this.focusKills = 0; this.alertKey = '';
-    this.headStreak = 0; this.focusCharges = 0;
+    this.headStreak = 0; this.focusCharges = 0; this.heat = 1; this.ui.setHeat(1);
     for (const sh of this.shards || []) this.scene.remove(sh.m);
     this.shards = []; this.ui.setStreak(0, false); this.ui.setRicochet(false);
     this.aim = { x: 0, y: 0 }; this.aimS = { x: 0, y: 0 };
@@ -371,7 +371,7 @@ export class Game {
   }
   // red Superhot laser sight from a goon's gun to you; flares right before the shot
   updateLaser(e, dz) {
-    const armed = e.alive && e.landed && !e.passive && e.type !== 'sword' && dz > 8 && dz < 40 && this.onScreen(e) && !this.bulletTime;
+    const armed = e.alive && e.landed && !e.passive && e.type !== 'sword' && dz > 8 && dz < 24 && this.onScreen(e) && !this.bulletTime;
     if (!armed) { if (e.laser) e.laser.visible = false; return; }
     if (!e.laser) {
       e.laser = new THREE.Mesh(BOX, new THREE.MeshBasicMaterial({ color: 0xff1f3d, transparent: true, opacity: 0.3, depthWrite: false, fog: false }));
@@ -549,20 +549,25 @@ export class Game {
   spawnBar(barBeat) {
     if (this.mode === 'tutorial') return;
     const bar = this.barCount++;
-    const diff = Math.min(1, this.time / 150) + this.lap * 0.25;
+    const H = this.heat;                       // 1..10, rises every 25s
+    const diff = Math.min(1, (H - 1) / 7);
     const pool = ['pistol'];
-    if (bar > 3) pool.push('smg');
-    if (bar > 7) pool.push('sword', 'pistol');
-    if (bar > 11) pool.push('shotgun');
+    if (H >= 2) pool.push('smg');
+    if (H >= 3) pool.push('sword', 'pistol');
+    if (H >= 4) pool.push('shotgun');
+    if (H >= 6) pool.push('smg', 'shotgun');
     // gentle ramp: 1 goon early, up to 3 per bar later, never more than 5 alive ahead
+    // a new group only every other bar; 1 early, up to 3 later; max 3 alive ahead
     const ahead = this.enemies.filter((e) => e.alive && this.p.z - e.obj.position.z > 0).length;
-    const want = bar < 3 ? 1 : 1 + Math.floor(Math.random() * (1.3 + diff * 1.7));
-    const n = Math.max(0, Math.min(want, 5 - ahead));
-    const zBase = 40 + this.speed * 1.0;
+    const everyBar = H >= 4 && Math.random() < 0.35 + diff * 0.6;
+    const want = bar % 2 && !everyBar ? 0 : 1 + Math.floor(Math.random() * Math.min(3, 0.6 + H * 0.35));
+    const maxAhead = Math.min(5, 1 + Math.ceil(H / 2));
+    const n = Math.max(0, Math.min(want, maxAhead - ahead));
+    const zBase = 26 + this.speed * 0.4; // close enough that you watch them drop in
     const used = new Set();
     for (let i = 0; i < n; i++) {
       const type = pool[Math.floor(Math.random() * pool.length)];
-      const zA = zBase + i * 5 + Math.random() * 4;
+      const zA = zBase + i * 3 + Math.random() * 3;
       let x, elev = 0;
       const r = Math.random();
       // only spots you can actually see: a lane, the corridor edge, or on top of a wall
@@ -577,12 +582,12 @@ export class Game {
       this.spawnEnemy(type, x, zA, barBeat + 1 + (i % 3), elev);
     }
     // hazards
-    if (bar > 2 && bar % 2 === 0 && Math.random() < 0.55 + diff * 0.3) this.spawnHazard(zBase + 14);
+    if (bar > 2 && bar % 2 === 1 && Math.random() < 0.3 + diff * 0.55) this.spawnHazard(40 + this.speed);
     // power-ups
     // biome portal
     if (bar === this.nextPortalBar) {
       const next = (this.biomeIndex + 1) % BIOMES.length;
-      this.world.schedulePortal(this.p.z - (zBase + 30), next);
+      this.world.schedulePortal(this.p.z - 70, next);
       this.nextPortalBar += 36;
     }
   }
@@ -649,9 +654,9 @@ export class Game {
     for (const e of this.enemies) {
       if (!e.alive || !e.landed || e.passive) continue;
       const dz = this.p.z - e.obj.position.z;
-      if (dz < 8 || dz > 40 || !this.onScreen(e)) continue;
+      if (dz < 8 || dz > 24 || !this.onScreen(e)) continue;
       if (inBeat === 3) e.warn = 0.2; // laser flares a 16th before the beat
-      if (e.type === 'pistol' && inBeat === 0 && (beatIdx + e.fireOffset) % 2 === 0) this.enemyFire(e, 1);
+      if (e.type === 'pistol' && inBeat === 0 && (this.heat >= 7 || (beatIdx + e.fireOffset) % 2 === 0)) this.enemyFire(e, 1);
       if (e.type === 'shotgun' && inBeat === 0 && beatIdx % 4 === (e.fireOffset ? 2 : 0) && dz < 30) this.enemyFire(e, 3);
       if (e.type === 'smg' && (e.tut ? beatIdx % 2 === 0 : beatIdx % 4 === 2 + e.fireOffset) && inBeat < 3) this.enemyFire(e, 1);
       if (e.type === 'sword' && inBeat === 0 && dz < 30) e.rushing = true;
@@ -715,7 +720,15 @@ export class Game {
     }
 
     // speed ramp
-    this.speed = this.mode === 'tutorial' ? 9 : Math.min(19, 11 + this.time * 0.035 + this.lap * 1.5);
+    if (this.mode !== 'tutorial') {
+      const H = Math.min(10, 1 + Math.floor(this.time / 25) + this.lap * 2);
+      if (H !== this.heat) {
+        this.heat = H; this.ui.setHeat(H); this.audio.sfx('warn');
+        this.ui.pop('HEAT ' + H + '!', innerWidth / 2, innerHeight * 0.28, H >= 7 ? '#ff1f3d' : '#ff7a00', 70, true);
+      }
+    }
+    const targetSpeed = this.mode === 'tutorial' ? 9 : Math.min(21, 10.5 + (this.heat - 1) * 1.0 + this.lap * 1.2);
+    this.speed += (targetSpeed - this.speed) * (1 - Math.exp(-dt * 0.8));
     if (!p.dead) p.z -= this.speed * dt;
     this.stats.dist = -p.z;
 

@@ -45,6 +45,12 @@ export class UI {
     a.style.setProperty('--ac', color || '#ffe600');
     a.classList.remove('on', 'brief'); void a.offsetWidth; a.classList.add('on'); if (brief) a.classList.add('brief');
   }
+  setHeat(h) {
+    const el = document.getElementById('heat'); if (!el) return;
+    el.querySelector('b').textContent = h;
+    el.style.background = h >= 7 ? '#ff1f3d' : h >= 4 ? '#ff7a00' : '#ffe600';
+    el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump');
+  }
   setStreak(n, ready) {
     const el = document.getElementById('streak');
     [...el.querySelectorAll('i')].forEach((s, i) => s.classList.toggle('on', i < n));

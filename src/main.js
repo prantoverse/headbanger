@@ -5,6 +5,7 @@ import { Game, WEAPONS } from './game.js';
 import { ComicPost } from './post.js';
 import { UI } from './ui.js';
 import { Tutorial } from './tutorial.js';
+import { SetPieces } from './setpieces.js';
 
 const canvas = document.getElementById('c');
 const coarse = matchMedia('(pointer:coarse)').matches;
@@ -20,6 +21,7 @@ scene.add(camera);
 const audio = new AudioEngine();
 const world = new World(scene);
 const ui = new UI();
+const setpieces = new SetPieces(scene, world);
 const post = new ComicPost(renderer, camera);
 const haptics = (pattern) => {
   try { if (navigator.vibrate) navigator.vibrate(pattern); } catch (e) {}
@@ -78,7 +80,7 @@ async function startGame(mode) {
   playBtn.textContent = 'TUNING GUITARS…';
   await audioReady; audio.resume(); playBtn.textContent = label;
   ui.show('menu', false); ui.show('over', false); ui.show('hud', true);
-  world.reset();
+  world.reset(); setpieces.reset();
   game.start(mode);
   audio.play(0);
   if (mode === 'tutorial') {
@@ -190,6 +192,7 @@ renderer.setAnimationLoop(() => {
     for (const t of touches.values()) if (!t.swiped && WEAPONS[game.p.weapon].auto && performance.now() - t.t0 > 180) game.fire(t.x, t.y);
     if (coarse && game.aim) { game.aim.x *= Math.exp(-dt * 2.5); game.aim.y *= Math.exp(-dt * 2.5); }
     game.update(dt);
+    setpieces.update(game.p.z, dt * game.timeScale, audio.songPos, world.beatPulse);
     tutorial.update();
   } else if (!game.p || !game.p.dead) {
     // menu attract: glide through the world
@@ -197,6 +200,7 @@ renderer.setAnimationLoop(() => {
     camera.position.set(Math.sin(attractZ * 0.05) * 1.5, 2.2, attractZ);
     camera.rotation.set(-0.05, Math.sin(attractZ * 0.03) * 0.2, Math.sin(attractZ * 0.04) * 0.05);
     world.update(attractZ, dt, (performance.now() / 400) % 1, performance.now() / 1000);
+    setpieces.update(attractZ, dt, performance.now() / 1000, world.beatPulse);
     post.u.time.value += dt; post.u.speed.value = 0.2;
   } else {
     game.update(dt * 0.3);
@@ -208,3 +212,4 @@ renderer.setAnimationLoop(() => {
 document.getElementById('title').animate([{ transform: 'rotate(-3deg) scale(2)', opacity: 0 }, { transform: 'rotate(-3deg) scale(1)', opacity: 1 }], { duration: 500, easing: 'cubic-bezier(.2,1.6,.4,1)' });
 window.__game = game;
 window.__tut = tutorial;
+window.__sp = setpieces;
