@@ -49,7 +49,7 @@ export function makeSteps() {
       done(g) { for (const e of g.enemies) if (e.tut && e.alive) g.killEnemy(e, 'body'); },
     },
     {
-      title: 'THROW & STEAL', text: T('Out of ammo! Press <b>Q</b> to throw your gun and steal theirs', 'Out of ammo! Hit <b>THROW</b> to chuck your gun and steal theirs'),
+      title: 'THROW & STEAL', text: T('Out of ammo! Press <b>F</b> or <b>right-click</b> to throw your gun and steal theirs', 'Out of ammo! Hit <b>THROW</b> to chuck your gun and steal theirs'),
       init(s, g) { g.setWeapon('pistol', 0); },
       ensure(g, s) {
         if (g.p.weapon === 'fists' && !g.thrown.length) g.setWeapon('pistol', 0);
@@ -62,10 +62,9 @@ export function makeSteps() {
       on(s, ev) { return ev === 'wallrun'; },
     },
     {
-      title: 'FOCUS', text: T('Shoot the <b>yellow canister</b> — time slows. <b>Click</b> 2 goons before it ends', 'Shoot the <b>yellow canister</b> — time slows. <b>Tap</b> 2 goons before it ends'),
+      title: 'FOCUS', text: T('Land <b>3 headshots in a row</b> to charge FOCUS, press <b>Q</b>, then click 2 goons', 'Land <b>3 headshots in a row</b> to charge FOCUS, hit <b>FOCUS</b>, then tap 2 goons'),
       ensure(g, s) {
         if (g.bulletTime) return;
-        if (!s.c || !g.hazards.includes(s.c)) s.c = g.spawnCanister('chrono', 30);
         ensureTargets(g, s, 3, 'pistol', 30);
       },
       on(s, ev, d) { return ev === 'bulletTimeEnd' && d.kills >= 2; },

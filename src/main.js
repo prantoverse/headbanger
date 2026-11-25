@@ -140,17 +140,20 @@ canvas.addEventListener('pointercancel', endTouch);
 
 addEventListener('keydown', (e) => {
   if (!game.running) { if (e.code === 'Enter' || e.code === 'Space') { const vis = !document.getElementById('menu').classList.contains('hidden') || !document.getElementById('over').classList.contains('hidden'); if (vis) startGame(); } return; }
+  if (e.ctrlKey || e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault(); // Ctrl = slide; stop Ctrl+D/S/A browser shortcuts
   if (e.repeat) return;
   switch (e.code) {
     case 'KeyA': case 'ArrowLeft': game.lane(-1); break;
     case 'KeyD': case 'ArrowRight': game.lane(1); break;
     case 'KeyW': case 'ArrowUp': case 'Space': game.jump(); e.preventDefault(); break;
-    case 'KeyS': case 'ArrowDown': case 'ControlLeft': game.slide(); break;
-    case 'KeyQ': game.throwWeapon(pointer.x, pointer.y); break;
+    case 'KeyS': case 'ArrowDown': case 'ControlLeft': case 'ControlRight': case 'KeyC': game.slide(); break;
+    case 'KeyF': game.throwWeapon(pointer.x, pointer.y); break;
+    case 'KeyQ': game.activateFocus(); break;
     case 'Escape': toMenu(); break;
   }
 });
 document.getElementById('btn-throw').addEventListener('pointerdown', (e) => { e.stopPropagation(); game.throwWeapon(); });
+document.getElementById('btn-focus').addEventListener('pointerdown', (e) => { e.stopPropagation(); game.activateFocus(); });
 
 // gamepad: left stick lanes, A jump, B slide, X throw, RT fire at screen center
 let gpPrev = {};
@@ -165,6 +168,7 @@ function pollGamepad() {
   if (edge('a', b(0))) game.jump();
   if (edge('b', b(1))) game.slide();
   if (edge('x', b(2))) game.throwWeapon();
+  if (edge('y', b(3))) game.activateFocus();
   if (edge('rt', b(7))) game.fire(innerWidth / 2, innerHeight / 2);
 }
 

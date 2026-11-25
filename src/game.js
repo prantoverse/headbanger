@@ -17,12 +17,23 @@ export const WEAPONS = {
   fists: { name: 'FISTS', ammo: Infinity, rate: 0.3, sfx: 'punch', melee: 5 },
 };
 
+// Superhot-style hot reds/oranges so goons pop against the purple/blue worlds
 const ENEMY = {
-  pistol: { jacket: 0x1d1d2e, trim: 0x00e5ff, weapon: 'pistol', score: 100 },
-  smg: { jacket: 0x4b1d7a, trim: 0xffe600, weapon: 'smg', score: 120 },
-  shotgun: { jacket: 0x7a2e10, trim: 0xff7a00, weapon: 'shotgun', score: 150 },
-  sword: { jacket: 0xff2e88, trim: 0xfff6e0, weapon: 'sword', score: 130 },
+  pistol: { jacket: 0xff2a14, skin: 0xff6a3a, pants: 0xa80c06, trim: 0xffb020, weapon: 'pistol', score: 100 },
+  smg: { jacket: 0xff4a0a, skin: 0xff7a40, pants: 0xb01a04, trim: 0xffe600, weapon: 'smg', score: 120 },
+  shotgun: { jacket: 0xd8140a, skin: 0xff5a2a, pants: 0x7a0804, trim: 0xff8a00, weapon: 'shotgun', score: 150 },
+  sword: { jacket: 0xff7a00, skin: 0xff9a4a, pants: 0xc02a04, trim: 0xfff6e0, weapon: 'sword', score: 130 },
 };
+const hotCache = new Map();
+function hot(color) { // toon + self-glow so they stay bright in dark biomes
+  if (!hotCache.has(color)) {
+    const m = toon(color).clone();
+    m.emissive = new THREE.Color(color).multiplyScalar(0.45);
+    hotCache.set(color, m);
+  }
+  return hotCache.get(color);
+}
+const TETRA = new THREE.TetrahedronGeometry(1, 0);
 
 function buildWeaponModel(type, scale = 1) {
   const g = new THREE.Group();
@@ -39,12 +50,12 @@ function buildWeaponModel(type, scale = 1) {
 function buildEnemy(type) {
   const d = ENEMY[type];
   const g = new THREE.Group();
-  const jacket = toon(d.jacket), skin = toon(0xffc9a0), pants = toon(0x14101e), trim = flat(d.trim);
+  const jacket = hot(d.jacket), skin = hot(d.skin), pants = hot(d.pants), trim = flat(d.trim);
   const torso = box(jacket, 0.62, 0.72, 0.36, 0, 1.18, 0);
   const tie = box(trim, 0.08, 0.5, 0.02, 0, 1.2, -0.19);
   const head = new THREE.Group(); head.position.set(0, 1.78, 0);
   head.add(box(skin, 0.36, 0.4, 0.36));
-  head.add(box(toon(0x14101e), 0.4, 0.12, 0.4, 0, 0.18, 0));        // hair/hat
+  head.add(box(hot(d.pants), 0.4, 0.12, 0.4, 0, 0.18, 0));        // hair/hat
   head.add(box(flat(0x0b0410), 0.38, 0.08, 0.02, 0, 0.03, -0.19));  // shades
   head.add(box(trim, 0.38, 0.02, 0.02, 0, 0.07, -0.2));
   const legL = box(pants, 0.22, 0.78, 0.24, -0.15, 0.4, 0), legR = box(pants, 0.22, 0.78, 0.24, 0.15, 0.4, 0);
@@ -99,6 +110,9 @@ export class Game {
     this.timeScale = 1; this.targetScale = 1;
     this.focus = 0;             // seconds of bullet time remaining (real)
     this.bulletTime = false; this.focusKills = 0; this.alertKey = '';
+    this.headStreak = 0; this.focusCharges = 0;
+    for (const sh of this.shards || []) this.scene.remove(sh.m);
+    this.shards = []; this.ui.setStreak(0, false); this.ui.setRicochet(false);
     this.aim = { x: 0, y: 0 }; this.aimS = { x: 0, y: 0 };
     this.hitstop = 0; this.autoSlow = 0; this.autoSlowCd = 0; this.impact = 0; this.hurtFx = 0;
     this.ricochet = false;
@@ -214,7 +228,7 @@ export class Game {
       p.cool = W.rate;
       if (t && t.enemy && t.enemy.obj.position.z > p.z - W.melee && t.enemy.obj.position.z < p.z + 0.5) {
         this.audio.sfx(W.sfx); this.vmKick(0.6);
-        this.killEnemy(t.enemy, t.part, { melee: true });
+        this.killEnemy(t.enemy, t.part, { melee: true, point: t.point });
       } else { this.audio.sfx('throw'); this.vmKick(0.3); }
       return;
     }
@@ -239,7 +253,7 @@ export class Game {
     if (p.weapon === 'shotgun') {
       for (const e of this.enemies) if (e !== t.enemy && e.alive && e.landed && e.obj.position.distanceTo(t.enemy.obj.position) < W.spread) killed.push(e);
     }
-    killed.forEach((e, i) => this.killEnemy(e, i === 0 ? t.part : 'body', { multi: killed.length }));
+    killed.forEach((e, i) => this.killEnemy(e, i === 0 ? t.part : 'body', { multi: killed.length, point: i === 0 ? t.point : null }));
     if (killed.length > 1) this.multiPop(killed.length);
   }
 
@@ -311,7 +325,7 @@ export class Game {
     }
     this.tracer(muzzle, t.point, 0x00e5ff);
     this.focusKills++;
-    this.killEnemy(t.enemy, t.part, {});
+    this.killEnemy(t.enemy, t.part, { point: t.point });
     this.hitstop = 0;
     const s2 = this.toScreen(t.point);
     if (this.focusKills > 1) this.ui.pop('×' + this.focusKills, s2.x + 50, s2.y - 50, '#00e5ff', 40);
@@ -372,7 +386,6 @@ export class Game {
     this.combo = Math.min(16, this.combo + 1); this.comboTimer = 4;
     this.addScore(Math.round(pts));
     this.stats.kills++; if (head) this.stats.heads++; if (beat) this.stats.beats++;
-    this.focus = this.bulletTime ? this.focus : this.focus; // focus only via canisters
     const pos = e.obj.position.clone().setY(head ? 1.8 : 1.2);
     const s = this.toScreen(pos);
     const words = opt.melee ? ['SLASH!', 'THWACK!', 'KRAK!'] : opt.thrown ? ['BONK!', 'CATCH!', 'YOINK!'] : head ? ['BLAM!', 'HEADSHOT!', 'BOOM!'] : ['BANG!', 'POW!', 'BLAT!'];
@@ -381,17 +394,62 @@ export class Game {
     if (beat === 'perfect') this.ui.pop('ON BEAT', s.x, s.y + 32, '#00e5ff', 24);
     this.ui.burst(s.x, s.y, head ? '#ff2e88' : '#ffe600');
     this.audio.sfx(head ? 'headshot' : 'hit');
-    this.spray(pos, head ? 0xff1f3d : 0xff2e88, head ? 22 : 12, head ? 7 : 5);
-    this.spray(pos, 0x0b0410, 6, 4);
+    this.spray(opt.point || pos, 0xfff6e0, head ? 10 : 5, head ? 8 : 5);
     if (head) { this.hitstop = 0.07; this.impact = 1; this.haptics([25, 20, 45]); }
     else this.haptics(18);
-    // knockback ragdoll
-    e.vel = new THREE.Vector3((Math.random() - 0.5) * 3, head ? 6 : 4, -6 - Math.random() * 4);
-    e.spin = new THREE.Vector3((Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8);
-    if (head) { e.obj.userData.head.visible = false; this.spray(pos, 0xffc9a0, 4, 5); }
+    // SHATTER from the exact hit point
+    this.shatter(e, opt.point || pos, head);
+    // headshot streak → FOCUS charge
+    if (!this.bulletTime) {
+      if (head) {
+        this.headStreak++;
+        if (this.headStreak % 3 === 0 && !this.focusCharges) {
+          this.focusCharges = 1; this.audio.sfx('slowIn');
+          this.ui.pop('FOCUS READY!', innerWidth / 2, innerHeight * 0.42, '#00e5ff', 60, true);
+          this.haptics([20, 30, 20, 30, 60]);
+        }
+        if (this.headStreak === 6) { this.ricochet = true; this.ui.setRicochet(true); this.ui.pop('RICOCHET LOADED', innerWidth / 2, innerHeight * 0.5, '#ff2e88', 40, true); }
+      } else this.headStreak = 0;
+      this.ui.setStreak(this.headStreak % 3 || (this.focusCharges ? 3 : 0), !!this.focusCharges);
+    }
     // drop weapon (not for throw kills — you catch it)
     if (!opt.thrown && !opt.melee) this.dropPickup(ENEMY[e.type].weapon, e.obj.position);
     this.ui.setScore(this.score, this.combo);
+  }
+
+  // Superhot-style: every visible block of the goon becomes shards flung away from the hit point
+  shatter(e, hit, head) {
+    const o = e.obj; o.updateMatrixWorld(true);
+    const wp = new THREE.Vector3(), ws = new THREE.Vector3(), dir = new THREE.Vector3();
+    const push = new THREE.Vector3(0, 0, -1); // away from the player
+    const meshes = [];
+    o.traverse((m) => { if (m.isMesh && m.material.visible !== false) meshes.push(m); });
+    for (const m of meshes) {
+      m.getWorldPosition(wp); m.getWorldScale(ws);
+      const vol = ws.x * ws.y * ws.z;
+      const n = Math.max(2, Math.min(9, Math.round(vol * 140)));
+      for (let i = 0; i < n; i++) {
+        const sh = new THREE.Mesh(TETRA, m.material);
+        sh.position.set(wp.x + (Math.random() - 0.5) * ws.x, wp.y + (Math.random() - 0.5) * ws.y, wp.z + (Math.random() - 0.5) * ws.z);
+        const sz = Math.cbrt(vol / n) * (0.75 + Math.random() * 0.6);
+        sh.scale.setScalar(Math.max(0.05, sz)); sh.rotation.set(Math.random() * 6, Math.random() * 6, Math.random() * 6);
+        dir.subVectors(sh.position, hit); const d = dir.length(); dir.normalize();
+        const blast = (head ? 10 : 7) / (0.5 + d * 1.6) + 1.2;
+        const v = dir.multiplyScalar(blast).addScaledVector(push, 2 + Math.random() * 3); v.y += 1.5 + Math.random() * 2;
+        this.scene.add(sh);
+        this.shards.push({ m: sh, v: v.clone(), spin: new THREE.Vector3(Math.random() * 14 - 7, Math.random() * 14 - 7, Math.random() * 14 - 7), life: 1.3 + Math.random() * 0.9, s0: sh.scale.x });
+      }
+    }
+    this.scene.remove(o); e.shattered = true;
+    while (this.shards.length > 450) { const old = this.shards.shift(); this.scene.remove(old.m); }
+  }
+
+  activateFocus() {
+    if (!this.running || this.p.dead || this.bulletTime || !this.focusCharges) return false;
+    this.focusCharges = 0; this.headStreak = 0; this.ui.setStreak(0, false);
+    this.ui.pop('FOCUS', innerWidth / 2, innerHeight * 0.4, '#00e5ff', 80, true);
+    this.enterBulletTime(); this.emit('focus');
+    return true;
   }
 
   multiPop(n, label) {
@@ -442,6 +500,7 @@ export class Game {
     }
     this.audio.sfx('hurt'); this.haptics([60, 30, 90]);
     this.hurtFx = 1; this.combo = 1; this.ui.setScore(this.score, this.combo);
+    this.headStreak = 0; this.ui.setStreak(this.focusCharges ? 3 : 0, !!this.focusCharges);
     if (p.armor > 0) {
       p.armor = 0; p.regen = 7; p.invuln = 0.9; this.ui.setArmor(0);
       this.ui.pop('ARMOR BROKEN', innerWidth / 2, innerHeight * 0.55, '#ff1f3d', 40);
@@ -487,7 +546,6 @@ export class Game {
     // hazards
     if (bar > 2 && bar % 2 === 0 && Math.random() < 0.55 + diff * 0.3) this.spawnHazard(zBase + 14);
     // power-ups
-    if (bar > 1 && bar % 5 === 2) this.spawnCanister(Math.random() < 0.7 ? 'chrono' : 'ricochet', zBase - 6);
     // biome portal
     if (bar === this.nextPortalBar) {
       const next = (this.biomeIndex + 1) % BIOMES.length;
@@ -709,6 +767,8 @@ export class Game {
           else { this.hurt(); e.alive = false; e.deadT = 0; e.vel = new THREE.Vector3(3, 3, 4); e.spin = new THREE.Vector3(3, 2, 1); }
         }
         if (dz < -6) { this.scene.remove(o); this.enemies.splice(i, 1); }
+      } else if (e.shattered) {
+        this.enemies.splice(i, 1);
       } else {
         e.deadT += dt;
         e.vel.y -= 18 * dt;
@@ -812,6 +872,16 @@ export class Game {
       }
     }
 
+    // shards
+    for (let i = this.shards.length - 1; i >= 0; i--) {
+      const q = this.shards[i]; q.life -= dt;
+      q.v.y -= 16 * dt; q.m.position.addScaledVector(q.v, dt);
+      if (q.m.position.y < 0.03) { q.m.position.y = 0.03; q.v.y *= -0.35; q.v.x *= 0.6; q.v.z *= 0.6; q.spin.multiplyScalar(0.6); }
+      q.m.rotation.x += q.spin.x * dt; q.m.rotation.y += q.spin.y * dt; q.m.rotation.z += q.spin.z * dt;
+      if (q.life < 0.4) q.m.scale.setScalar(q.s0 * Math.max(0, q.life / 0.4));
+      if (q.life <= 0) { this.scene.remove(q.m); this.shards.splice(i, 1); }
+    }
+
     // tracers & particles
     for (let i = this.tracers.length - 1; i >= 0; i--) { const t = this.tracers[i]; t.life -= realDt; t.obj.scale.x = t.obj.scale.y = 0.05 * (t.life / 0.09) + 0.01; if (t.life <= 0) { this.scene.remove(t.obj); this.tracers.splice(i, 1); } }
     for (let i = this.particles.length - 1; i >= 0; i--) {
@@ -835,12 +905,8 @@ export class Game {
     const touchUI = matchMedia('(pointer:coarse)').matches;
     if (!p.dead) {
       if (this.bulletTime) al = ['focus', 'FOCUS', touchUI ? 'TAP THE GOONS' : 'CLICK THE GOONS', '#00e5ff', true];
-      else if (p.ammo <= 0 && !WEAPONS[p.weapon].melee) al = ['throw', 'THROW YOUR GUN!', touchUI ? 'HIT  THROW' : 'PRESS  Q  /  RIGHT-CLICK', '#ff1f3d'];
+      else if (p.ammo <= 0 && !WEAPONS[p.weapon].melee) al = ['throw', 'THROW YOUR GUN!', touchUI ? 'HIT  THROW' : 'PRESS  F  /  RIGHT-CLICK', '#ff1f3d'];
       else if (p.weapon === 'fists') al = ['grab', 'GRAB A GUN!', touchUI ? 'TAP A DROPPED GUN · PUNCH UP CLOSE' : 'CLICK A DROPPED GUN · PUNCH UP CLOSE', '#ffe600'];
-      else {
-        const c = this.hazards.find((h) => h.kind === 'canister' && !h.broken && p.z - h.obj.position.z < 34 && p.z - h.obj.position.z > 3);
-        if (c) al = ['can' + c.type, 'SHOOT THE CANISTER!', c.type === 'chrono' ? 'YELLOW = FOCUS' : 'PINK = RICOCHET', c.type === 'chrono' ? '#ffe600' : '#ff2e88'];
-      }
     }
     const key = al ? al[0] : '';
     if (key !== this.alertKey) { this.alertKey = key; this.ui.setAlert(al && al[1], al && al[2], al && al[3], al && al[4]); }

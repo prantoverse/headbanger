@@ -45,6 +45,13 @@ export class UI {
     a.style.setProperty('--ac', color || '#ffe600');
     a.classList.remove('on', 'brief'); void a.offsetWidth; a.classList.add('on'); if (brief) a.classList.add('brief');
   }
+  setStreak(n, ready) {
+    const el = document.getElementById('streak');
+    [...el.querySelectorAll('i')].forEach((s, i) => s.classList.toggle('on', i < n));
+    el.classList.toggle('ready', ready);
+    document.getElementById('focus-ready').classList.toggle('on', ready);
+    document.getElementById('btn-focus').classList.toggle('on', ready);
+  }
   setRicochet(on) { this.crosshair.style.borderColor = on ? '#ff2e88' : ''; }
   beat() {
     const r = this.beatRing;
