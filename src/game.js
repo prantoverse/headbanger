@@ -137,7 +137,7 @@ export class Game {
     this.marks = []; this.markGroup.clear();
     this.p = {
       z: 0, x: 0, lane: 1, y: 0, vy: 0, slide: 0, wall: 0, wallSide: 0, roll: 0,
-      armor: 1, regen: 0, dead: false, invuln: 0, spin: 0,
+      armor: 2, regen: 0, heals: 0, dead: false, invuln: 0, spin: 0,
       weapon: 'pistol', ammo: WEAPONS.pistol.ammo, cool: 0, kick: 0,
     };
     this.speed = 11;
@@ -157,7 +157,7 @@ export class Game {
     this.last16 = -1; this.lastBar = -1; this.barCount = 0;
     this.biomeIndex = 0; this.lap = 0; this.nextPortalBar = 36;
     this.setWeapon('pistol', WEAPONS.pistol.ammo);
-    this.ui.setArmor(1); this.ui.setScore(0, 1); this.ui.setFocus(0, false);
+    this.ui.setArmor(2); this.ui.setScore(0, 1); this.ui.setFocus(0, false);
   }
 
   start(mode = 'run') { this.mode = mode; this.reset(); this.running = true; }
@@ -469,6 +469,18 @@ export class Game {
     this.spray(opt.point || pos, 0xfff6e0, head ? 10 : 5, head ? 8 : 5);
     if (head) { this.hitstop = 0.07; this.impact = 1; this.haptics([25, 20, 45]); }
     else this.haptics(18);
+    if (head && !this.p.dead) {
+      this.p.heals++;
+      if (this.p.heals >= 2) {
+        this.p.heals = 0;
+        if (this.p.armor < 3) {
+          this.p.armor++; this.ui.setArmor(this.p.armor, true);
+          this.ui.pop('+1 ARMOR', innerWidth - 120, 90, '#00e5ff', 40);
+          this.audio.sfx('twinkle'); this.haptics([10, 30, 10]);
+        }
+      }
+      this.ui.setHealProgress(this.p.heals);
+    }
     if (e.disco) this.goofy.startDisco();
     if (head && this.mode === 'run' && Math.random() < 0.14) this.goofy.spawnBanana(e.obj.position.x, e.obj.position.z);
     if (head) this.goofy.headCount++;
@@ -596,8 +608,8 @@ export class Game {
     this.hurtFx = 1; this.combo = 1; this.ui.setScore(this.score, this.combo);
     this.headStreak = 0; this.ui.setStreak(this.focusCharges ? 3 : 0, !!this.focusCharges);
     if (p.armor > 0) {
-      p.armor = 0; p.regen = 7; p.invuln = 0.9; this.ui.setArmor(0);
-      this.ui.pop(label + ' ARMOR BROKEN', innerWidth / 2, innerHeight * 0.55, '#ff1f3d', 44, true);
+      p.armor--; p.regen = 8; p.invuln = 0.9; this.ui.setArmor(p.armor);
+      this.ui.pop(label + (p.armor ? ' -1 ARMOR' : ' ARMOR BROKEN'), innerWidth / 2, innerHeight * 0.55, '#ff1f3d', 44, true);
     } else {
       p.dead = true; this.impact = 1; this.targetScale = 0.15;
       setTimeout(() => this.onGameOver && this.onGameOver(), 1100);

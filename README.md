@@ -4,7 +4,7 @@
 
 **Gun-fu × darksynth × bullet time.** An endless rhythm-shooter runner in a Spider-Verse comic style, built with three.js. Plays in the browser on phone and PC.
 
-- Shoot on the beat, go for headshots. Enemies die in one hit, and so do you (after your armor breaks).
+- Shoot on the beat, go for headshots. Enemies die in one hit. You have up to 3 armor pips (start with 2); **every 2 headshots restores one**.
 - Dodge lanes, jump, slide, and **wall run**. Bullets, barriers and rockets are all telegraphed to the music.
 - **No reloading.** When your gun runs dry, **throw it** at an enemy and steal their weapon.
 - Goons are Superhot-red and **shatter into shards** from wherever your bullet lands.

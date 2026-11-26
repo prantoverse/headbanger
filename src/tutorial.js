@@ -127,7 +127,7 @@ export class Tutorial {
     const st = this.steps[this.i];
     if (st.ensure) st.ensure(this.game, this.state);
     // keep the player safe & stocked during the lesson
-    this.game.p.armor = 1;
+    if (this.game.p.armor < 2) { this.game.p.armor = 2; this.ui.setArmor(2); }
   }
   finish() {
     this.active = false; this.game.onEvent = null;

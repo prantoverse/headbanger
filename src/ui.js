@@ -10,7 +10,7 @@ export class UI {
     this.alertEl = $('alert'); this.alertMain = $('alert-main'); this.alertSub = $('alert-sub');
     this.armorEl = $('armor'); this.beatRing = $('beat-ring'); this.biomeEl = $('biome-name');
     this.crosshair = $('crosshair');
-    this.armorEl.innerHTML = '<span></span>';
+    this.armorEl.innerHTML = '<span></span><span></span><span></span><em></em>';
   }
   show(id, on) { $(id).classList.toggle('hidden', !on); }
 
@@ -31,7 +31,13 @@ export class UI {
     this.weaponBox.classList.toggle('empty', n <= 0);
   }
   flashThrow() { this.weaponBox.classList.add('empty'); }
-  setArmor(a) { this.armorEl.classList.toggle('broken', a <= 0); }
+  setArmor(a, gained = false) {
+    const pips = this.armorEl.querySelectorAll('span');
+    pips.forEach((s, i) => { s.classList.toggle('on', i < a); s.classList.toggle('gain', gained && i === a - 1); });
+    this.armorEl.classList.toggle('broken', a <= 0);
+  }
+  // half-filled marker: 1 of 2 headshots toward the next armor
+  setHealProgress(n) { this.armorEl.querySelector('em').style.width = (n / 2) * 100 + '%'; }
   setFocus(f, on) {
     this.focusBar.classList.toggle('on', on);
     this.focusFill.style.width = Math.max(0, f) * 100 + '%';
