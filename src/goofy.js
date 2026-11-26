@@ -37,7 +37,8 @@ function buildBanana() {
     f.rotation.y = i * 2.1; g.add(f);
   }
   g.add(m(SPH, toon(0x5a3a1a), 0.42, 0, 0, 0.06, 0.06, 0.06));
-  g.scale.setScalar(1.5);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.9, 0.05, 4, 20), flat(0xffe600)); ring.rotation.x = Math.PI / 2; ring.position.y = 0.02; g.add(ring); g.userData.ring = ring;
+  g.scale.setScalar(2);
   return g;
 }
 
@@ -162,11 +163,12 @@ export class Goofy {
     for (let i = this.bananas.length - 1; i >= 0; i--) {
       const b = this.bananas[i], dz = p.z - b.obj.position.z;
       if (Math.abs(dz) < 0.9 && Math.abs(p.x - b.obj.position.x) < 1 && p.y < 0.3 && !p.wall) {
-        p.spin = Math.PI * 2; this.scene.remove(b.obj); this.bananas.splice(i, 1);
+        p.spin = 1; this.scene.remove(b.obj); this.bananas.splice(i, 1);
         g.ui.pop('WHOOPS!', innerWidth / 2, innerHeight * 0.45, '#ffe600', 64, true);
         g.audio.sfx('whistle'); g.haptics([10, 20, 10, 20, 10]);
         continue;
       }
+      b.obj.userData.ring.scale.setScalar(1 + this.g.world.beatPulse * 0.5);
       if (dz < -6) { this.scene.remove(b.obj); this.bananas.splice(i, 1); }
     }
     // confetti / feathers flutter down

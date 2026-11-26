@@ -859,8 +859,10 @@ export class Game {
     const slideY = p.slide > 0 ? -0.85 : 0;
     const bob = p.y === 0 && p.slide <= 0 ? Math.sin(this.time * 14) * 0.04 : 0;
     this.camera.position.set(p.x, 1.6 + p.y + slideY + bob, p.z);
-    if (p.spin > 0) p.spin = Math.max(0, p.spin - realDt * 8);
-    this.camera.rotation.set(-0.03, (this.p.x - tx) * -0.05, p.roll + p.spin);
+    // banana slip: a quick cartoon wobble (decaying), not a full roll
+    if (p.spin > 0) p.spin = Math.max(0, p.spin - realDt * 1.6);
+    const slip = p.spin > 0 ? Math.sin(p.spin * 22) * 0.22 * p.spin : 0;
+    this.camera.rotation.set(-0.03 - slip * 0.3, (this.p.x - tx) * -0.05, p.roll + slip);
     const fovT = (this.camera.aspect < 1 ? 90 : 72) + (this.bulletTime ? -8 : 0) + (this.speed - 11) * 0.6;
     this.camera.fov += (fovT - this.camera.fov) * quick * 0.5; this.camera.updateProjectionMatrix();
 
