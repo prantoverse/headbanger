@@ -19,10 +19,10 @@ export const WEAPONS = {
 
 // Superhot-style hot reds/oranges so goons pop against the purple/blue worlds
 const ENEMY = {
-  pistol: { jacket: 0xff2a14, skin: 0xff6a3a, pants: 0xa80c06, trim: 0xffb020, weapon: 'pistol', score: 100 },
-  smg: { jacket: 0xff4a0a, skin: 0xff7a40, pants: 0xb01a04, trim: 0xffe600, weapon: 'smg', score: 120 },
-  shotgun: { jacket: 0xd8140a, skin: 0xff5a2a, pants: 0x7a0804, trim: 0xff8a00, weapon: 'shotgun', score: 150 },
-  sword: { jacket: 0xff7a00, skin: 0xff9a4a, pants: 0xc02a04, trim: 0xfff6e0, weapon: 'sword', score: 130 },
+  pistol: { jacket: 0xff2418, pants: 0xe01810, weapon: 'pistol', score: 100 },
+  smg: { jacket: 0xff3a1c, pants: 0xe02412, weapon: 'smg', score: 120 },
+  shotgun: { jacket: 0xf01a14, pants: 0xc8120c, weapon: 'shotgun', score: 150 },
+  sword: { jacket: 0xff4a20, pants: 0xe03014, weapon: 'sword', score: 130 },
 };
 const hotCache = new Map();
 function hot(color) { // toon + self-glow so they stay bright in dark biomes
@@ -47,30 +47,63 @@ function buildWeaponModel(type, scale = 1) {
   return g;
 }
 
+// Superhot-style goon: faceless, faceted red-crystal mannequin
+const crystalCache = new Map();
+function crystal(color, glow = 0.5) {
+  const k = color + ':' + glow;
+  if (!crystalCache.has(k)) {
+    const m = new THREE.MeshToonMaterial({ color, gradientMap: toon(color).gradientMap, flatShading: true });
+    m.emissive = new THREE.Color(color).multiplyScalar(glow * 0.7);
+    crystalCache.set(k, m);
+  }
+  return crystalCache.get(k);
+}
+const G = {
+  head: new THREE.IcosahedronGeometry(0.2, 1),
+  neck: new THREE.CylinderGeometry(0.06, 0.07, 0.14, 5),
+  chest: new THREE.CylinderGeometry(0.33, 0.2, 0.58, 6),
+  belly: new THREE.CylinderGeometry(0.2, 0.25, 0.32, 6),
+  thigh: new THREE.CylinderGeometry(0.11, 0.08, 0.46, 5),
+  shin: new THREE.CylinderGeometry(0.08, 0.055, 0.46, 5),
+  foot: new THREE.BoxGeometry(0.12, 0.07, 0.24),
+  upper: new THREE.CylinderGeometry(0.075, 0.06, 0.34, 5),
+  fore: new THREE.CylinderGeometry(0.06, 0.045, 0.32, 5),
+  hand: new THREE.IcosahedronGeometry(0.065, 0),
+};
+const gm = (geo, mat, x, y, z, rx = 0, sx = 1, sy = 1, sz = 1) => { const o = new THREE.Mesh(geo, mat); o.position.set(x, y, z); o.rotation.x = rx; o.scale.set(sx, sy, sz); return o; };
+
 function buildEnemy(type) {
   const d = ENEMY[type];
+  const body = crystal(d.jacket, 0.55), limb = crystal(d.pants, 0.5);
   const g = new THREE.Group();
-  const jacket = hot(d.jacket), skin = hot(d.skin), pants = hot(d.pants), trim = flat(d.trim);
-  const torso = box(jacket, 0.62, 0.72, 0.36, 0, 1.18, 0);
-  const tie = box(trim, 0.08, 0.5, 0.02, 0, 1.2, -0.19);
-  const head = new THREE.Group(); head.position.set(0, 1.78, 0);
-  head.add(box(skin, 0.36, 0.4, 0.36));
-  head.add(box(hot(d.pants), 0.4, 0.12, 0.4, 0, 0.18, 0));        // hair/hat
-  head.add(box(flat(0x0b0410), 0.38, 0.08, 0.02, 0, 0.03, -0.19));  // shades
-  head.add(box(trim, 0.38, 0.02, 0.02, 0, 0.07, -0.2));
-  const legL = box(pants, 0.22, 0.78, 0.24, -0.15, 0.4, 0), legR = box(pants, 0.22, 0.78, 0.24, 0.15, 0.4, 0);
-  const armR = new THREE.Group(); armR.position.set(0.38, 1.46, 0);
-  armR.add(box(jacket, 0.17, 0.17, 0.6, 0, 0, -0.26)); armR.add(box(skin, 0.14, 0.14, 0.12, 0, 0, -0.58));
-  const gun = buildWeaponModel(d.weapon, 1.1); gun.position.set(0, 0.04, -0.62); armR.add(gun);
-  const armL = new THREE.Group(); armL.position.set(-0.38, 1.46, 0);
-  armL.add(box(jacket, 0.17, 0.6, 0.17, 0, -0.26, 0));
-  g.add(torso, tie, head, legL, legR, armR, armL);
+  // torso group keeps the old pivot (y 1.18) so the bob animation still works
+  const torso = new THREE.Group(); torso.position.y = 1.18; g.add(torso);
+  torso.add(gm(G.chest, body, 0, 0.18, 0, 0, 1, 1, 0.62));
+  torso.add(gm(G.belly, body, 0, -0.24, 0, 0, 1, 1, 0.62));
+  torso.add(gm(G.neck, body, 0, 0.53, 0));
+  const head = new THREE.Group(); head.position.set(0, 1.86, 0);
+  head.add(gm(G.head, body, 0, 0, 0, 0, 0.92, 1.18, 1));   // faceless
+  // legs pivot at the hip
+  const mkLeg = (x) => {
+    const L = new THREE.Group(); L.position.set(x, 0.88, 0);
+    L.add(gm(G.thigh, limb, 0, -0.22, 0), gm(G.shin, limb, 0, -0.66, 0), gm(G.foot, limb, 0, -0.88, -0.05));
+    return L;
+  };
+  const legL = mkLeg(-0.13), legR = mkLeg(0.13);
+  // gun arm aims forward (-z), pivot at the shoulder
+  const armR = new THREE.Group(); armR.position.set(0.34, 1.52, 0);
+  armR.add(gm(G.upper, body, 0, 0, -0.16, Math.PI / 2), gm(G.fore, body, 0, 0, -0.48, Math.PI / 2), gm(G.hand, body, 0, 0, -0.64));
+  const gun = buildWeaponModel(d.weapon, 1.1); gun.position.set(0, 0.06, -0.66); armR.add(gun);
+  const armL = new THREE.Group(); armL.position.set(-0.34, 1.52, 0);
+  armL.add(gm(G.upper, body, 0, -0.17, 0), gm(G.fore, body, 0, -0.5, 0.02), gm(G.hand, body, 0, -0.68, 0.03));
+  armL.rotation.z = -0.12;
+  g.add(head, legL, legR, armR, armL);
   // hitboxes (invisible, generous)
-  const hHead = new THREE.Mesh(BOX, hitMat); hHead.scale.set(0.62, 0.62, 0.62); hHead.position.set(0, 1.8, 0); hHead.userData.part = 'head';
+  const hHead = new THREE.Mesh(BOX, hitMat); hHead.scale.set(0.62, 0.62, 0.62); hHead.position.set(0, 1.86, 0); hHead.userData.part = 'head';
   const hBody = new THREE.Mesh(BOX, hitMat); hBody.scale.set(1.0, 1.55, 0.8); hBody.position.set(0, 0.85, 0); hBody.userData.part = 'body';
   g.add(hHead, hBody);
   g.userData = { torso, head, legL, legR, armR, armL, gun, hHead, hBody };
-  g.scale.setScalar(1.15);
+  g.scale.setScalar(type === 'shotgun' ? 1.28 : 1.15);
   return g;
 }
 
@@ -451,8 +484,10 @@ export class Game {
     o.traverse((m) => { if (m.isMesh && m.material.visible !== false) meshes.push(m); });
     for (const m of meshes) {
       m.getWorldPosition(wp); m.getWorldScale(ws);
+      if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
+      const bb = m.geometry.boundingBox; ws.x *= bb.max.x - bb.min.x; ws.y *= bb.max.y - bb.min.y; ws.z *= bb.max.z - bb.min.z;
       const vol = ws.x * ws.y * ws.z;
-      const n = Math.max(2, Math.min(9, Math.round(vol * 140)));
+      const n = Math.max(2, Math.min(10, Math.round(vol * 160)));
       for (let i = 0; i < n; i++) {
         const sh = new THREE.Mesh(TETRA, m.material);
         sh.position.set(wp.x + (Math.random() - 0.5) * ws.x, wp.y + (Math.random() - 0.5) * ws.y, wp.z + (Math.random() - 0.5) * ws.z);
@@ -563,23 +598,22 @@ export class Game {
     // gentle ramp: 1 goon early, up to 3 per bar later, never more than 5 alive ahead
     // a new group only every other bar; 1 early, up to 3 later; max 3 alive ahead
     const ahead = this.enemies.filter((e) => e.alive && this.p.z - e.obj.position.z > 0).length;
-    const everyBar = H >= 4 && Math.random() < 0.35 + diff * 0.6;
-    const want = bar % 2 && !everyBar ? 0 : 1 + Math.floor(Math.random() * Math.min(3, 0.6 + H * 0.35));
-    const maxAhead = Math.min(5, 1 + Math.ceil(H / 2));
+    // more goons to pew pew: a group almost every bar, bigger groups as heat rises
+    const everyBar = H >= 2 || Math.random() < 0.5;
+    const want = bar % 2 && !everyBar ? 0 : 1 + Math.floor(Math.random() * Math.min(4, 1.2 + H * 0.45));
+    const maxAhead = Math.min(7, 3 + Math.ceil(H / 2));
     const n = Math.max(0, Math.min(want, maxAhead - ahead));
     const zBase = 26 + this.speed * 0.4; // close enough that you watch them drop in
     const used = new Set();
     for (let i = 0; i < n; i++) {
       const type = pool[Math.floor(Math.random() * pool.length)];
-      const zA = zBase + i * 3 + Math.random() * 3;
+      const zA = zBase + i * 2.5 + Math.random() * 3;
       let x, elev = 0;
       const r = Math.random();
       // only spots you can actually see: a lane, the corridor edge, or on top of a wall
-      if (type === 'sword' || r < 0.5) x = LANES[Math.floor(Math.random() * 3)];
-      else {
-        const side = Math.random() < 0.5 ? -1 : 1;
-        x = side * 3.0; // corridor edge, always in front of the walls
-      }
+      const SPOTS = [-3.0, -2.2, -1.1, 0, 1.1, 2.2, 3.0]; // all inside the corridor, in front of the walls
+      if (type === 'sword') x = LANES[Math.floor(Math.random() * 3)];
+      else x = SPOTS[Math.floor(Math.random() * SPOTS.length)];
       const key = Math.round(x) + ':' + elev;
       if (used.has(key)) continue; used.add(key);
       this.spawnEnemy(type, x, zA, barBeat + 1 + (i % 3), elev);
