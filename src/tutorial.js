@@ -43,7 +43,7 @@ export function makeSteps() {
       init(s) { s.n = 0; },
       ensure(g, s) {
         const live = g.enemies.filter((e) => e.alive && e.tut && g.p.z - e.obj.position.z > 9);
-        if (!live.length) { const e = g.spawnEnemy('smg', 4.4, 34, g.audio.beat + 0.5, 0.6); e.tut = true; e.fireOffset = 0; }
+        if (!live.length) { const e = g.spawnEnemy('smg', 2.2, 30, g.audio.beat + 0.5, 0); e.tut = true; e.fireOffset = 0; }
       },
       on(s, ev, d) { if (ev === 'bullet' && !d.hit && d.dx < 3.5) s.n++; return s.n >= 3; },
       done(g) { for (const e of g.enemies) if (e.tut && e.alive) g.killEnemy(e, 'body'); },
@@ -78,7 +78,8 @@ function ensureTargets(g, s, n, type, dist = 26) {
   if (live.length) return;
   if (s.cool && performance.now() < s.cool) return;
   s.cool = performance.now() + 400;
-  const xs = n === 1 ? [LANES[1]] : n === 2 ? [LANES[0] - 0.4, LANES[2] + 0.4] : [LANES[0] - 0.6, LANES[1], LANES[2] + 0.6];
+  // always inside the corridor (walls sit at ±3.7)
+  const xs = n === 1 ? [LANES[1]] : n === 2 ? [LANES[0], LANES[2]] : [LANES[0], LANES[1], LANES[2]];
   xs.forEach((x, i) => { const e = g.spawnEnemy(type, x, dist + i * 3, g.audio.beat + 1 + i * 0.5, 0, true); e.tut = true; });
 }
 
