@@ -220,14 +220,16 @@ export class AudioEngine {
   // called every frame with real dt and desired time scale
   // music bends with game time but much less: slow-mo stays groovy instead of turning to mud.
   // focus mode = a deliberate half-time, pitched-down, filtered version of the song.
-  update(realDt, timeScale, focus = false) {
+  update(realDt, timeScale, focus = false, groove = false) {
     if (!this.started) return;
     const rate = focus ? 0.66 : 1 - (1 - timeScale) * 0.4;
     this.rate += (rate - this.rate) * (1 - Math.exp(-realDt * (focus ? 7 : 10)));
     this.src.playbackRate.setTargetAtTime(this.rate, this.ctx.currentTime, 0.02);
-    const cut = focus ? 1500 : this.rate < 0.97 ? 2500 + 15000 * (this.rate - 0.6) : 20000;
-    this.lp.frequency.setTargetAtTime(Math.max(600, cut), this.ctx.currentTime, 0.06);
-    this.lp.Q.setTargetAtTime(focus ? 6 : 1.2, this.ctx.currentTime, 0.1);
+    let cut = focus ? 1500 : this.rate < 0.97 ? 2500 + 15000 * (this.rate - 0.6) : 20000;
+    // GROOVE ZONE: auto-wah sweeping on half-beats
+    if (groove && !focus) cut = 700 + 5200 * (0.5 + 0.5 * Math.sin((this.songPos / BEAT) * Math.PI));
+    this.lp.frequency.setTargetAtTime(Math.max(600, cut), this.ctx.currentTime, groove ? 0.02 : 0.06);
+    this.lp.Q.setTargetAtTime(focus ? 6 : groove ? 9 : 1.2, this.ctx.currentTime, 0.1);
     this.songPos += realDt * this.rate;
   }
   get beat() { return this.songPos / BEAT; }
@@ -279,6 +281,22 @@ export class AudioEngine {
         this._tone(t, { type: 'sawtooth', f0: 900, f1: 200, dur: 0.14, vol: 0.18 }); break;
       case 'whiz':
         this._noise(t, { dur: 0.22, type: 'bandpass', freq: 3500, sweep: 800, q: 6, vol: 0.5 }); break;
+      case 'squeak':
+        this._tone(t, { f0: 900, f1: 1900, dur: 0.12, vol: 0.4 }); this._tone(t + 0.12, { f0: 1900, f1: 500, dur: 0.5, vol: 0.35 }); break;
+      case 'coo':
+        this._tone(t, { f0: 420, f1: 360, dur: 0.18, vol: 0.4 }); this._tone(t + 0.2, { f0: 400, f1: 300, dur: 0.28, vol: 0.35 }); break;
+      case 'flap':
+        for (let i = 0; i < 8; i++) this._noise(t + i * 0.04, { dur: 0.05, type: 'bandpass', freq: 900 + Math.random() * 600, q: 1, vol: 0.25 }); break;
+      case 'whistle':
+        this._tone(t, { f0: 500, f1: 1700, dur: 0.35, vol: 0.3 }); this._tone(t + 0.35, { f0: 1700, f1: 400, dur: 0.4, vol: 0.3 }); break;
+      case 'twinkle':
+        [2093, 2637, 3136, 4186].forEach((f, i) => this._tone(t + i * 0.05, { f0: f, f1: f, dur: 0.25, vol: 0.12 })); break;
+      case 'pop':
+        this._tone(t, { f0: 1200, f1: 200, dur: 0.08, vol: 0.5 }); this._noise(t, { dur: 0.05, freq: 2000, vol: 0.5 }); break;
+      case 'party':
+        this._noise(t, { dur: 0.15, freq: 3000, vol: 0.6 }); this._tone(t, { type: 'square', f0: 300, f1: 900, dur: 0.15, vol: 0.15 }); break;
+      case 'scratch':
+        for (let i = 0; i < 3; i++) this._noise(t + i * 0.09, { dur: 0.08, type: 'bandpass', freq: i % 2 ? 600 : 2400, sweep: i % 2 ? 2400 : 600, q: 3, vol: 0.5 }); break;
       case 'heart':
         this._tone(t, { f0: 70, f1: 40, dur: 0.18, vol: 0.9 }); this._tone(t + 0.16, { f0: 60, f1: 35, dur: 0.16, vol: 0.6 }); break;
       case 'tapeStop':

@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { BEAT, LOOP_LEN } from './audio.js';
 import { LANES, WALL_X, toon, flat, BIOMES } from './world.js';
+import { Goofy } from './goofy.js';
 
 const BOX = new THREE.BoxGeometry(1, 1, 1);
 const CYL = new THREE.CylinderGeometry(1, 1, 1, 10);
@@ -34,6 +35,7 @@ function hot(color) { // toon + self-glow so they stay bright in dark biomes
   return hotCache.get(color);
 }
 const TETRA = new THREE.TetrahedronGeometry(1, 0);
+const DISCO_MAT = (() => { const m = new THREE.MeshToonMaterial({ color: 0xd8e0ff, gradientMap: toon(0xd8e0ff).gradientMap, flatShading: true }); m.emissive = new THREE.Color(0x404860); return m; })();
 
 function buildWeaponModel(type, scale = 1) {
   const g = new THREE.Group();
@@ -123,6 +125,7 @@ export class Game {
     this.partPool = new Pool(() => new THREE.Mesh(BOX, flat(0xffffff)));
     this.markGroup = new THREE.Group(); scene.add(this.markGroup);
     this.running = false;
+    this.goofy = new Goofy(this);
   }
 
   // ------------------------------------------------------------ lifecycle
@@ -134,7 +137,7 @@ export class Game {
     this.marks = []; this.markGroup.clear();
     this.p = {
       z: 0, x: 0, lane: 1, y: 0, vy: 0, slide: 0, wall: 0, wallSide: 0, roll: 0,
-      armor: 1, regen: 0, dead: false, invuln: 0,
+      armor: 1, regen: 0, dead: false, invuln: 0, spin: 0,
       weapon: 'pistol', ammo: WEAPONS.pistol.ammo, cool: 0, kick: 0,
     };
     this.speed = 11;
@@ -145,6 +148,7 @@ export class Game {
     this.focus = 0;             // seconds of bullet time remaining (real)
     this.bulletTime = false; this.focusKills = 0; this.alertKey = '';
     this.headStreak = 0; this.focusCharges = 0; this.heat = 1; this.ui.setHeat(1);
+    this.goofy.reset();
     for (const sh of this.shards || []) this.scene.remove(sh.m);
     this.shards = []; this.ui.setStreak(0, false); this.ui.setRicochet(false);
     this.aim = { x: 0, y: 0 }; this.aimS = { x: 0, y: 0 };
@@ -221,13 +225,17 @@ export class Game {
     for (const e of this.enemies) if (e.alive && e.landed) targets.push(e.obj.userData.hHead, e.obj.userData.hBody);
     for (const h of this.hazards) if (h.kind === 'canister' && !h.broken) targets.push(h.hit);
     for (const pk of this.pickups) targets.push(pk.hit);
+    for (const h of this.hazards) if (h.kind === 'duck' && !h.popped) targets.push(h.hit);
+    targets.push(...this.goofy.targets());
     const hits = this.ray.intersectObjects(targets, false);
     if (hits.length) {
       const o = hits[0].object;
       const e = this.enemies.find((e) => e.obj.userData.hHead === o || e.obj.userData.hBody === o);
       if (e) return { enemy: e, part: o.userData.part, point: hits[0].point };
-      const h = this.hazards.find((h) => h.hit === o); if (h) return { canister: h, point: hits[0].point };
+      const h = this.hazards.find((h) => h.hit === o);
+      if (h) return h.kind === 'duck' ? { duck: h, point: hits[0].point } : { canister: h, point: hits[0].point };
       const pk = this.pickups.find((pk) => pk.hit === o); if (pk) return { pickup: pk, point: hits[0].point };
+      const bird = this.goofy.findBird(o); if (bird) return { bird, point: hits[0].point };
     }
     if (!assist) return null;
     // aim assist: nearest head on screen
@@ -274,6 +282,8 @@ export class Game {
     const muzzle = this.muzzlePos();
 
     if (t && t.canister) { this.tracer(muzzle, t.point); this.breakCanister(t.canister); return; }
+    if (t && t.bird) { this.tracer(muzzle, t.point); this.goofy.shootBird(t.bird, t.point); return; }
+    if (t && t.duck) { this.tracer(muzzle, t.point); this.popDuck(t.duck, t.point); return; }
     if (!t || !t.enemy) {
       // miss: tracer into the distance
       const ndc = new THREE.Vector2((sx / innerWidth) * 2 - 1, -(sy / innerHeight) * 2 + 1);
@@ -287,7 +297,7 @@ export class Game {
     if (p.weapon === 'shotgun') {
       for (const e of this.enemies) if (e !== t.enemy && e.alive && e.landed && e.obj.position.distanceTo(t.enemy.obj.position) < W.spread) killed.push(e);
     }
-    killed.forEach((e, i) => this.killEnemy(e, i === 0 ? t.part : 'body', { multi: killed.length, point: i === 0 ? t.point : null }));
+    killed.forEach((e, i) => this.killEnemy(e, i === 0 ? t.part : 'body', { multi: killed.length, point: i === 0 ? t.point : null, shotgun: p.weapon === 'shotgun' }));
     if (killed.length > 1) this.multiPop(killed.length);
   }
 
@@ -338,7 +348,7 @@ export class Game {
   }
   enterBulletTime() {
     this.bulletTime = true; this.focus = 5; this.focusKills = 0;
-    this.targetScale = 0.2; this.audio.sfx('tapeStop');
+    this.targetScale = 0.2; this.audio.sfx('tapeStop'); this.audio.sfx('scratch');
     this.ui.setFocus(1, true); this.ui.setMarking(true);
   }
   // FOCUS: every click is a free, instant shot. Just point and click.
@@ -351,6 +361,8 @@ export class Game {
     this.audio.sfx(p.weapon === 'shotgun' ? 'shotgun' : 'pistol'); this.vmKick(0.6); this.haptics(15);
     if (t && t.canister) { this.tracer(muzzle, t.point); this.breakCanister(t.canister); return; }
     if (t && t.pickup) { this.grabPickup(t.pickup); return; }
+    if (t && t.bird) { this.tracer(muzzle, t.point, 0x00e5ff); this.goofy.shootBird(t.bird, t.point); return; }
+    if (t && t.duck) { this.tracer(muzzle, t.point, 0x00e5ff); this.popDuck(t.duck, t.point); return; }
     if (!t || !t.enemy) {
       const ndc = new THREE.Vector2((sx / innerWidth) * 2 - 1, -(sy / innerHeight) * 2 + 1);
       this.ray.setFromCamera(ndc, this.camera);
@@ -447,7 +459,9 @@ export class Game {
     const pos = e.obj.position.clone().setY(head ? 1.8 : 1.2);
     const s = this.toScreen(pos);
     const words = opt.melee ? ['SLASH!', 'THWACK!', 'KRAK!'] : opt.thrown ? ['BONK!', 'CATCH!', 'YOINK!'] : head ? ['BLAM!', 'HEADSHOT!', 'BOOM!'] : ['BANG!', 'POW!', 'BLAT!'];
-    const w = words[Math.floor(Math.random() * words.length)];
+    let w = words[Math.floor(Math.random() * words.length)];
+    if (Math.random() < 0.18) w = ['BONK!', 'YEET!', 'SPLORT!', 'OOF!', 'BWAMP!', 'ঢিশুম!', 'ধুম!', 'ঠাস!', 'ধপাস!'][Math.floor(Math.random() * 9)];
+    if (head && e.bobble) { w = 'POP!'; this.audio.sfx('pop'); }
     this.ui.pop(w, s.x, s.y - 20, head ? '#ff1f3d' : '#ffe600', head ? 58 : 42, head);
     if (beat === 'perfect') this.ui.pop('ON BEAT', s.x, s.y + 32, '#00e5ff', 24);
     this.ui.burst(s.x, s.y, head ? '#ff2e88' : '#ffe600');
@@ -455,8 +469,24 @@ export class Game {
     this.spray(opt.point || pos, 0xfff6e0, head ? 10 : 5, head ? 8 : 5);
     if (head) { this.hitstop = 0.07; this.impact = 1; this.haptics([25, 20, 45]); }
     else this.haptics(18);
-    // SHATTER from the exact hit point
-    this.shatter(e, opt.point || pos, head);
+    if (e.disco) this.goofy.startDisco();
+    if (head && this.mode === 'run' && Math.random() < 0.14) this.goofy.spawnBanana(e.obj.position.x, e.obj.position.z);
+    if (head) this.goofy.headCount++;
+    if (head && this.goofy.headCount % 10 === 0) {
+      // every 10th headshot: a confetti cannon instead of shards
+      this.goofy.confetti(opt.point || pos, 120);
+      this.ui.pop('PARTY!', s.x, s.y - 70, '#9dff3c', 54, true);
+      this.scene.remove(e.obj); e.shattered = true; if (e.laser) { this.scene.remove(e.laser); e.laser = null; }
+    } else if (opt.shotgun && !head && Math.random() < 0.5) {
+      // Team-Rocket toss: blasted off into the sky until they twinkle
+      e.toss = true; e.deadT = 0;
+      e.vel = new THREE.Vector3((Math.random() - 0.5) * 10, 26, -30);
+      e.spin = new THREE.Vector3(9, 0, 7);
+      this.ui.pop('YEET!', s.x, s.y - 60, '#00e5ff', 48);
+    } else {
+      // SHATTER from the exact hit point
+      this.shatter(e, opt.point || pos, head);
+    }
     // headshot streak → FOCUS charge
     if (!this.bulletTime) {
       if (head) {
@@ -554,7 +584,7 @@ export class Game {
   hurt(src) {
     const p = this.p;
     if (p.invuln > 0 || p.dead) return;
-    const CAUSE = { bullet: 'SHOT!', slash: 'SLASHED!', bump: 'BODY-CHECKED!', rocket: 'ROCKET!', barrier: 'BARRIER!' };
+    const CAUSE = { bullet: 'SHOT!', slash: 'SLASHED!', bump: 'BODY-CHECKED!', rocket: 'ROCKET!', barrier: 'BARRIER!', duck: 'DUCKED!' };
     const label = CAUSE[src] || 'HIT!';
     this.lastCause = label;
     if (this.mode === 'tutorial') {
@@ -581,8 +611,21 @@ export class Game {
     obj.position.set(x, elevated + 9, z);
     obj.rotation.y = 0;
     this.scene.add(obj);
-    this.enemies.push({ obj, type, alive: true, landed: false, landBeat, baseY: elevated, fireOffset: Math.floor(Math.random() * 2), rushing: false, t: 0, burst: 0, passive });
-    return this.enemies[this.enemies.length - 1];
+    const en = { obj, type, alive: true, landed: false, landBeat, baseY: elevated, fireOffset: Math.floor(Math.random() * 2), rushing: false, t: 0, burst: 0, passive };
+    if (this.mode === 'run') {
+      const r = Math.random(), u = obj.userData;
+      if (this.heat >= 2 && r < 0.07) { // DISCO goon: mirror-ball head
+        en.disco = true;
+        u.head.clear();
+        const ball = new THREE.Mesh(new THREE.IcosahedronGeometry(0.3, 1), DISCO_MAT); u.head.add(ball);
+        for (let k = 0; k < 6; k++) { const sp = new THREE.Mesh(BOX, flat(0xffffff)); sp.scale.set(0.05, 0.05, 0.05); sp.position.setFromSphericalCoords(0.33, Math.random() * 3, Math.random() * 6); u.head.add(sp); }
+      } else if (this.heat >= 2 && r < 0.27) { // bobblehead
+        en.bobble = true;
+        u.head.scale.setScalar(2.2); u.head.position.y += 0.25; u.hHead.scale.setScalar(1.2); u.hHead.position.y += 0.25;
+      }
+    }
+    this.enemies.push(en);
+    return en;
   }
 
   spawnBar(barBeat) {
@@ -620,6 +663,7 @@ export class Game {
     }
     // hazards
     if (bar > 2 && bar % 2 === 1 && Math.random() < 0.3 + diff * 0.55) this.spawnHazard(40 + this.speed);
+    if (bar > 1 && Math.random() < 0.12) this.goofy.spawnFlock(30 + this.speed * 0.5);
     // power-ups
     // biome portal
     if (bar === this.nextPortalBar) {
@@ -631,7 +675,7 @@ export class Game {
 
   spawnHazard(zAhead, forceKind) {
     const z = this.p.z - zAhead;
-    const kinds = ['low', 'high', 'lane', 'dive', 'cross'];
+    const kinds = ['low', 'high', 'lane', 'dive', 'cross', 'duck'];
     const kind = forceKind || kinds[Math.floor(Math.random() * kinds.length)];
     const b = BIOMES[this.world.biomeAt(z)];
     const g = new THREE.Group(); g.position.z = z;
@@ -661,6 +705,19 @@ export class Game {
       const pillar = new THREE.Mesh(BOX, new THREE.MeshBasicMaterial({ color: 0xff1f3d, transparent: true, opacity: 0.25, depthWrite: false }));
       pillar.scale.set(2, 6, 0.6); pillar.position.set(LANES[lane], 3, 0); g.add(pillar); h.pillar = pillar;
       rocket.position.set(LANES[lane] + 8, 18, -6); g.add(rocket); h.rocket = rocket; h.lane = lane; h.armed = true;
+    } else if (kind === 'duck') { // giant rubber duck blocks a lane — shoot it to deflate it
+      const lane = Math.floor(Math.random() * 3);
+      h.lanes = [lane]; h.yMin = 0; h.yMax = 2.4; h.lane = lane;
+      const duck = new THREE.Group();
+      const yel = toon(0xffd21a), org = toon(0xff8a00);
+      const bodyM = new THREE.Mesh(SPH, yel); bodyM.scale.set(1.05, 0.85, 1.3); bodyM.position.y = 0.85; duck.add(bodyM);
+      const headM = new THREE.Mesh(SPH, yel); headM.scale.setScalar(0.62); headM.position.set(0, 1.95, 0.45); duck.add(headM);
+      duck.add(box(org, 0.6, 0.18, 0.5, 0, 1.85, 1.05));
+      for (const sx of [-1, 1]) { const eye = new THREE.Mesh(SPH, flat(0x0b0410)); eye.scale.setScalar(0.1); eye.position.set(sx * 0.28, 2.1, 0.95); duck.add(eye); }
+      const tail = new THREE.Mesh(SPH, yel); tail.scale.set(0.35, 0.45, 0.35); tail.position.set(0, 1.35, -1.2); duck.add(tail);
+      duck.position.x = LANES[lane]; duck.scale.setScalar(1.15);
+      const hit = new THREE.Mesh(BOX, hitMat); hit.scale.set(2.3, 2.8, 2.8); hit.position.y = 1.2; duck.add(hit);
+      g.add(duck); h.duck = duck; h.hit = hit;
     } else if (kind === 'cross') { // rocket flying across from the right at chest height -> slide/jump
       h.lanes = [0, 1, 2]; h.yMin = 0.9; h.yMax = 1.7;
       const rocket = new THREE.Group();
@@ -745,7 +802,7 @@ export class Game {
     if (p.dead) this.timeScale = Math.max(0.12, this.timeScale);
     const dt = realDt * this.timeScale;
     this.time += dt;
-    this.audio.update(realDt, this.timeScale, this.bulletTime);
+    this.audio.update(realDt, this.timeScale, this.bulletTime, this.goofy.groove > 0);
 
     // focus timer
     if (this.bulletTime) {
@@ -802,7 +859,8 @@ export class Game {
     const slideY = p.slide > 0 ? -0.85 : 0;
     const bob = p.y === 0 && p.slide <= 0 ? Math.sin(this.time * 14) * 0.04 : 0;
     this.camera.position.set(p.x, 1.6 + p.y + slideY + bob, p.z);
-    this.camera.rotation.set(-0.03, (this.p.x - tx) * -0.05, p.roll);
+    if (p.spin > 0) p.spin = Math.max(0, p.spin - realDt * 8);
+    this.camera.rotation.set(-0.03, (this.p.x - tx) * -0.05, p.roll + p.spin);
     const fovT = (this.camera.aspect < 1 ? 90 : 72) + (this.bulletTime ? -8 : 0) + (this.speed - 11) * 0.6;
     this.camera.fov += (fovT - this.camera.fov) * quick * 0.5; this.camera.updateProjectionMatrix();
 
@@ -853,6 +911,8 @@ export class Game {
         u.armR.rotation.x = (e.recoil || 0) * 0.6 + (e.type === 'sword' ? Math.sin(stepT * 10) * 0.8 : 0);
         e.recoil = (e.recoil || 0) * Math.exp(-dt * 10);
         u.torso.position.y = 1.18 + Math.sin(stepT * 8 + i) * 0.03;
+        if (e.bobble) { u.head.rotation.z = Math.sin(this.time * 9 + i) * 0.28; u.head.rotation.x = Math.sin(this.time * 7 + i) * 0.15; }
+        if (e.disco) u.head.rotation.y += realDt * 3;
         if (e.rushing) { u.legL.rotation.x = Math.sin(stepT * 18) * 0.7; u.legR.rotation.x = -u.legL.rotation.x; }
         // collision with player
         if (e.landed && Math.abs(dz) < 0.9 && Math.abs(o.position.x - p.x) < 1.0 && e.baseY < 1 && bodyMin < 1.2 && !p.wall) {
@@ -867,6 +927,13 @@ export class Game {
       } else {
         if (e.laser) { this.scene.remove(e.laser); e.laser = null; }
         e.deadT += dt;
+        if (e.toss) {
+          o.position.addScaledVector(e.vel, dt);
+          o.rotation.x += e.spin.x * dt; o.rotation.z += e.spin.z * dt;
+          o.scale.multiplyScalar(Math.exp(-dt * 1.4));
+          if (e.deadT > 1.3) { this.goofy.twinkle(o.position); this.scene.remove(o); this.enemies.splice(i, 1); }
+          continue;
+        }
         e.vel.y -= 18 * dt;
         o.position.addScaledVector(e.vel, dt);
         o.rotation.x += e.spin.x * dt; o.rotation.z += e.spin.z * dt;
@@ -881,7 +948,7 @@ export class Game {
       b.obj.position.addScaledVector(b.vel, dt);
       b.t += dt;
       const bz = b.obj.position.z;
-      if (!b.passed && bz >= p.z && b.prevZ < p.z + 0.01) {
+      if (!b.passed && bz >= p.z) { // bullets only travel toward/past you, so crossing your z = the moment of truth
         b.passed = true;
         const dx = Math.abs(b.obj.position.x - p.x), by = b.obj.position.y;
         const hit = dx < 0.62 && by > bodyMin && by < bodyMax;
@@ -903,6 +970,13 @@ export class Game {
     for (let i = this.hazards.length - 1; i >= 0; i--) {
       const h = this.hazards[i];
       const dz = p.z - h.obj.position.z;
+      if (h.kind === 'duck') {
+        if (h.popped) { // deflating, squealing, flying off
+          h.pt += dt; const d = h.duck;
+          d.scale.set(1.15 * (1 + Math.sin(h.pt * 40) * 0.12) * Math.max(0.2, 1 - h.pt * 0.6), 1.15 * Math.max(0.15, 1 - h.pt * 0.7), 1.15 * Math.max(0.2, 1 - h.pt * 0.5));
+          d.position.y += dt * (4 + h.pt * 14); d.position.x += Math.sin(h.pt * 13) * dt * 6; d.rotation.y += dt * 12;
+        } else h.duck.rotation.z = Math.sin(this.time * 4) * 0.08;
+      }
       if (h.kind === 'canister') {
         h.obj.rotation.y += realDt * 2; h.ring.scale.setScalar(1 + this.world.beatPulse * 0.4);
         if (dz < -4 || h.broken) { this.scene.remove(h.obj); this.hazards.splice(i, 1); }
@@ -934,7 +1008,7 @@ export class Game {
         const inLane = h.lanes.includes(lane) && !p.wall;
         const overlap = bodyMax > h.yMin && bodyMin < h.yMax;
         this.emit('hazard', { kind: h.kind, ok: !(inLane && overlap) });
-        if (inLane && overlap) this.hurt(h.kind === 'dive' || h.kind === 'cross' ? 'rocket' : 'barrier');
+        if (inLane && overlap) this.hurt(h.kind === 'dive' || h.kind === 'cross' ? 'rocket' : h.kind === 'duck' ? 'duck' : 'barrier');
         else if (h.kind !== 'lane') { this.addScore(30); this.ui.pop(h.kind === 'high' ? 'LIMBO!' : h.kind === 'low' ? 'VAULT!' : 'DODGED!', innerWidth / 2, innerHeight * 0.66, '#fff6e0', 28); }
         if (h.kind === 'cross') { if (h.rocket) h.obj.remove(h.rocket); if (h.warn) h.obj.remove(h.warn); }
       }
@@ -1012,13 +1086,22 @@ export class Game {
     if (key !== this.alertKey) { this.alertKey = key; this.ui.setAlert(al && al[1], al && al[2], al && al[3], al && al[4]); }
 
     // post fx
+    this.goofy.update(realDt, dt);
     const u = this.post.u;
+    u.trip.value = this.goofy.trip; u.beat.value = this.world.beatPulse;
     u.time.value += realDt;
     u.slow.value += ((this.timeScale < 0.6 ? 1 : 0) - u.slow.value) * (1 - Math.exp(-realDt * 8));
     this.impact = Math.max(0, this.impact - realDt * 9); u.impact.value = this.impact > 0.5 ? 1 : 0;
     u.shift.value += (1.5 + this.world.beatPulse * 2.5 - u.shift.value) * (1 - Math.exp(-realDt * 12));
     u.speed.value = Math.min(1, Math.max(0, (this.speed - 15) / 8) + (this.timeScale < 0.6 ? 0.7 : 0) + (p.wall ? 0.6 : 0));
     this.hurtFx = Math.max(0, this.hurtFx - realDt * 2); u.hurt.value = Math.max(this.hurtFx, p.armor === 0 ? 0.35 + Math.sin(this.time * 8) * 0.1 : 0);
+  }
+
+  popDuck(h, point) {
+    h.popped = true; h.pt = 0; h.lanes = [];
+    const s = this.toScreen(point);
+    this.ui.pop('SQUEAK!', s.x, s.y - 30, '#ffd21a', 58, true);
+    this.audio.sfx('squeak'); this.addScore(80, false); this.haptics(25);
   }
 
   explode(h, pos) {

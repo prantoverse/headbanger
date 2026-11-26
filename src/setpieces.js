@@ -1,5 +1,5 @@
 // Giant weird background set pieces that roll past every so often:
-// fever-dream set pieces: blasting-off giant mechs, staring sky eyes, sky traffic, a huge sub, satellites.
+// fever-dream set pieces: mechs, sky eyes, sky traffic, a huge sub, satellites, a cat paw, moai heads, a jetpack whale, a sky DJ.
 import * as THREE from 'three';
 import { toon, flat } from './world.js';
 
@@ -151,13 +151,87 @@ function buildSedan() {
   return g;
 }
 
+// ---------------------------------------------------------------- GOOFY SKY STUFF
+const TOR = new THREE.TorusGeometry(1, 0.25, 8, 20);
+function buildPaw() {
+  const g = new THREE.Group();
+  const fur = toon(0xffa040), stripe = toon(0xc86414), pink = toon(0xff8ab0), white = toon(0xfff1e0);
+  const arm = m(CYL, fur, 0, 34, 0, 6, 60, 6); g.add(arm);
+  for (let i = 0; i < 6; i++) g.add(m(CYL, stripe, 0, 12 + i * 8, 0, 6.15, 2, 6.15));
+  g.add(m(SPH, white, 0, 2, 0, 8, 5, 8.5));                                  // paw
+  g.add(m(SPH, pink, 0, -1.6, 1.2, 3.6, 1.2, 3));                            // big bean
+  for (const [x, z] of [[-4.2, -3], [-1.5, -5], [1.5, -5], [4.2, -3]]) g.add(m(SPH, pink, x, -1.2, z, 1.4, 0.7, 1.4)); // toe beans
+  return g;
+}
+function buildMoai() {
+  const g = new THREE.Group();
+  const stone = toon(0x8a8a9a), dark = toon(0x55556a);
+  g.add(m(BOX, stone, 0, 0, 0, 5, 11, 4.4));
+  g.add(m(BOX, stone, 0, 3.4, -2.6, 5.2, 1.4, 1.2));          // heavy brow
+  g.add(m(BOX, dark, -1.2, 2.2, -2.3, 1.5, 1.1, 0.4), m(BOX, dark, 1.2, 2.2, -2.3, 1.5, 1.1, 0.4)); // eye shadows
+  g.add(m(BOX, stone, 0, 0.6, -2.9, 1.2, 4.2, 1.6));          // long nose
+  g.add(m(BOX, dark, 0, -2.6, -2.35, 2.8, 0.7, 0.6));         // pout
+  g.add(m(BOX, stone, 0, -4.8, -2.0, 3.6, 1.6, 1.5));         // chin
+  g.add(m(CYL, toon(0xb04a3a), 0, 6.3, 0, 2.6, 1.8, 2.6));    // red topknot
+  return g;
+}
+function buildWhale() {
+  const g = new THREE.Group();
+  const blue = toon(0x3a6aff), belly = toon(0xbfd8ff), metal = toon(0x9aa4bc);
+  g.add(m(SPH, blue, 0, 0, 0, 14, 6.5, 6.5));
+  g.add(m(SPH, belly, 1.5, -2.6, 0, 11, 3.2, 5.2));
+  const tail = new THREE.Group(); tail.position.x = -13; g.add(tail);
+  tail.add(m(SPH, blue, -2, 0, 0, 4, 2.2, 2.2));
+  const fl1 = m(BOX, blue, -6, 0, 2.6, 3.5, 0.6, 5); fl1.rotation.y = 0.5; const fl2 = m(BOX, blue, -6, 0, -2.6, 3.5, 0.6, 5); fl2.rotation.y = -0.5; tail.add(fl1, fl2);
+  for (const z of [-6, 6]) { const fin = m(BOX, blue, 3, -3, z, 4, 0.5, 2.5); fin.rotation.x = Math.sign(z) * 0.5; g.add(fin); }
+  for (const z of [-5.6, 5.6]) { g.add(m(SPH, flat(0xffffff), 9, 1, z, 1.1, 1.1, 0.4), m(SPH, flat(0x0b0410), 9.4, 1, z * 1.04, 0.55, 0.55, 0.3)); }
+  const flames = [];
+  for (const z of [-2.5, 2.5]) {
+    g.add(m(CYL, metal, -2, 6.4, z, 1.4, 6, 1.4));
+    const fl = m(CONE, flat(0xff7a00), -2, 1.6, z, 1.3, 4, 1.3); fl.rotation.z = Math.PI; g.add(fl); flames.push(fl);
+  }
+  g.userData = { tail, flames };
+  return g;
+}
+function buildDJ() {
+  const g = new THREE.Group();
+  const booth = toon(0x1c1c28), neon = flat(0xff2e88), cyan = flat(0x00e5ff), red = toon(0xff2418);
+  g.add(m(BOX, booth, 0, 0, 0, 16, 4, 6), m(BOX, neon, 0, 1.2, -3.05, 16, 0.4, 0.1), m(BOX, cyan, 0, -0.6, -3.05, 16, 0.2, 0.1));
+  const decks = [];
+  for (const x of [-4.5, 4.5]) {
+    const d = new THREE.Group(); d.position.set(x, 2.15, 0);
+    d.add(m(CYL, toon(0x0b0410), 0, 0, 0, 2.6, 0.3, 2.6), m(CYL, flat(x < 0 ? 0xffe600 : 0x9dff3c), 0, 0.2, 0, 0.9, 0.1, 0.9), m(BOX, flat(0xffffff), 1.6, 0.25, 0, 1.2, 0.08, 0.15));
+    g.add(d); decks.push(d);
+  }
+  const speakers = [];
+  for (const x of [-11, 11]) {
+    const sp = new THREE.Group(); sp.position.set(x, 1, 0);
+    sp.add(m(BOX, booth, 0, 0, 0, 5, 9, 5));
+    const cone = m(CYL, toon(0x55556a), 0, -1.6, -2.55, 1.8, 0.3, 1.8); cone.rotation.x = Math.PI / 2; sp.add(cone);
+    const tw = m(CYL, toon(0x55556a), 0, 2.4, -2.55, 0.8, 0.3, 0.8); tw.rotation.x = Math.PI / 2; sp.add(tw);
+    g.add(sp); speakers.push(cone, tw);
+  }
+  // giant faceless crystal DJ with headphones
+  const dj = new THREE.Group(); dj.position.set(0, 2, 2.5); g.add(dj);
+  dj.add(m(CYL, red, 0, 3, 0, 2.2, 5, 1.6));
+  const head = new THREE.Group(); head.position.y = 7.4; dj.add(head);
+  head.add(m(SPH, red, 0, 0, 0, 1.7, 2, 1.7));
+  const hp = m(TOR, toon(0x0b0410), 0, 0.6, 0, 1.9, 1.9, 1.9); hp.rotation.y = Math.PI / 2; head.add(hp);
+  for (const x of [-1.8, 1.8]) head.add(m(CYL, flat(0xff2e88), x, 0, 0, 0.8, 0.5, 0.8)).children.at(-1).rotation.z = Math.PI / 2;
+  const arm = new THREE.Group(); arm.position.set(2.2, 4.8, 0); dj.add(arm);
+  arm.add(m(CYL, red, 0, -1.6, -1.2, 0.5, 3.6, 0.5));
+  arm.children[0].rotation.x = -0.9;
+  g.userData = { decks, speakers, head, arm };
+  return g;
+}
+
 export class SetPieces {
   constructor(scene, world) { this.scene = scene; this.world = world; this.items = []; this.nextAt = -60; this.last = ''; }
   reset() { for (const it of this.items) this.scene.remove(it.obj); this.items = []; this.nextAt = -30; this.last = ''; }
 
   spawn(type, z) {
     const g = new THREE.Group(); g.position.z = z; this.scene.add(g);
-    if (this.world) this.world.clearZones.push([z - 110, z + 25]);
+    if (this.world) this.world.clearZones.push(['paw', 'whale', 'dj', 'eyes'].includes(type) ? [z - 260, z + 60] : [z - 110, z + 25]);
     const it = { type, obj: g, z, t: 0, parts: [] };
     if (type === 'mechs') {
       // giant mechs crouched beside the route; they blast off as you approach
@@ -206,6 +280,16 @@ export class SetPieces {
         g.add(car); it.parts.push({ car, dir, x0: car.position.x, y0: car.position.y, ph: Math.random() * 6 });
       }
     }
+    if (type === 'paw') { const paw = buildPaw(); paw.position.set(-8, 95, 0); paw.scale.setScalar(1.7); g.add(paw); it.parts.push({ paw }); it.follow = 100; it.life = 9; }
+    if (type === 'moai') {
+      for (let i = 0; i < 4; i++) {
+        const mo = buildMoai(); const side = i % 2 ? 1 : -1;
+        mo.position.set(side * (8 + Math.random() * 9), 30 + Math.random() * 12, -i * 28); mo.scale.setScalar(1.8);
+        g.add(mo); it.parts.push({ mo, ph: Math.random() * 6 });
+      }
+    }
+    if (type === 'whale') { const wh = buildWhale(); wh.position.set(-26, 44, 0); wh.scale.setScalar(1.3); g.add(wh); it.parts.push({ wh }); it.follow = 120; it.life = 16; it.spout = 0; it.bits = []; }
+    if (type === 'dj') { const dj = buildDJ(); dj.position.set(0, 34, 0); dj.scale.setScalar(1.8); g.add(dj); it.parts.push({ dj }); it.follow = 115; it.life = 13; }
     this.items.push(it);
   }
 
@@ -213,7 +297,7 @@ export class SetPieces {
     for (const it of this.items) it.lookX = playerX;
     // a new oddity roughly every 130m
     if (playerZ < this.nextAt) {
-      const types = ['mechs', 'eyes', 'satellites', 'submarine', 'sedan', 'mechs', 'eyes'].filter((t) => t !== this.last);
+      const types = ['mechs', 'eyes', 'satellites', 'submarine', 'sedan', 'paw', 'moai', 'whale', 'dj', 'mechs', 'eyes', 'paw', 'whale', 'dj'].filter((t) => t !== this.last);
       const type = types[Math.floor(Math.random() * types.length)];
       this.last = type; this.spawn(type, playerZ - 185);
       this.nextAt = playerZ - 150;
@@ -262,6 +346,42 @@ export class SetPieces {
         p.R.userData.iris.position.x = p.L.userData.iris.position.x;
         p.pair.position.y = 34 + Math.sin(songTime * 1.3) * 1.2;
         if (it.life <= 0) { this.scene.remove(it.obj); this.items.splice(i, 1); continue; }
+      }
+      if (it.follow) it.obj.position.z = playerZ - it.follow;
+      if (it.life != null && it.type !== 'eyes') { it.life -= dt; if (it.life <= 0) { this.scene.remove(it.obj); this.items.splice(i, 1); continue; } }
+      if (it.type === 'paw') { // reach down out of the swirly sky, bat across the road, pull back up
+        const p = it.parts[0], t = it.t;
+        const down = t < 2.2 ? t / 2.2 : t < 5.5 ? 1 : Math.max(0, 1 - (t - 5.5) / 2);
+        p.paw.position.y = 95 - down * 78;
+        p.paw.position.x = t < 2.2 ? -8 : t < 5.5 ? -8 + Math.sin((t - 2.2) / 3.3 * Math.PI * 1.5) * 18 : p.paw.position.x;
+        p.paw.rotation.z = Math.sin(t * 3) * 0.12;
+      }
+      if (it.type === 'moai') for (const p of it.parts) {
+        p.mo.position.y += Math.sin(songTime * 0.9 + p.ph) * 0.02;
+        const want = Math.atan2(playerX - p.mo.position.x, (playerZ - it.obj.position.z) - p.mo.position.z) + Math.PI;
+        p.mo.rotation.y += (want - p.mo.rotation.y) * (1 - Math.exp(-dt * 1.2));
+      }
+      if (it.type === 'whale') {
+        const p = it.parts[0]; p.wh.position.x += dt * 5; p.wh.position.y = 44 + Math.sin(it.t * 0.7) * 2;
+        p.wh.userData.tail.rotation.y = Math.sin(it.t * 2.5) * 0.35;
+        for (const f of p.wh.userData.flames) f.scale.y = 3 + Math.random() * 3;
+        it.spout -= dt;
+        if (it.spout <= 0) { // confetti spout from the blowhole
+          it.spout = 1.8;
+          for (let k = 0; k < 40; k++) {
+            const b = new THREE.Mesh(BOX, flat([0xff1f3d, 0xffe600, 0x00e5ff, 0x9dff3c, 0xff2e88][k % 5])); b.scale.setScalar(0.5 + Math.random() * 0.5);
+            b.position.copy(p.wh.position); b.position.y += 8; it.obj.add(b);
+            it.bits.push({ b, v: new THREE.Vector3((Math.random() - 0.5) * 12, 14 + Math.random() * 10, (Math.random() - 0.5) * 12), life: 2.5 });
+          }
+        }
+        for (let j = it.bits.length - 1; j >= 0; j--) { const q = it.bits[j]; q.life -= dt; q.v.y -= 12 * dt; q.b.position.addScaledVector(q.v, dt); q.b.rotation.x += dt * 6; if (q.life <= 0) { it.obj.remove(q.b); it.bits.splice(j, 1); } }
+      }
+      if (it.type === 'dj') {
+        const u = it.parts[0].dj.userData;
+        for (const d of u.decks) d.rotation.y += dt * 3.5;
+        for (const sp of u.speakers) sp.scale.y = 0.3 + beatPulse * 0.5;
+        u.head.rotation.x = -beatPulse * 0.35;                 // nodding to the beat
+        u.arm.rotation.y = Math.sin(songTime * Math.PI * 2.5) * 0.6; // scratching
       }
       if (it.type === 'satellites') for (const p of it.parts) { p.s.rotation.y += p.spin * dt; p.s.userData.blink.visible = Math.floor(songTime * 2) % 2 === 0; }
       if (it.type === 'submarine') {

@@ -67,11 +67,11 @@ export class World {
     this.clearZones = [];
 
     // sky dome
-    this.skyU = { top: { value: new THREE.Color(BIOMES[0].skyTop) }, bot: { value: new THREE.Color(BIOMES[0].skyBot) }, accent: { value: new THREE.Color(BIOMES[0].skyAccent) }, time: { value: 0 }, stars: { value: 1 } };
+    this.skyU = { top: { value: new THREE.Color(BIOMES[0].skyTop) }, bot: { value: new THREE.Color(BIOMES[0].skyBot) }, accent: { value: new THREE.Color(BIOMES[0].skyAccent) }, time: { value: 0 }, stars: { value: 1 }, kaleido: { value: 0 } };
     const sky = new THREE.Mesh(new THREE.SphereGeometry(420, 32, 16), new THREE.ShaderMaterial({
       side: THREE.BackSide, depthWrite: false, fog: false, uniforms: this.skyU,
       vertexShader: `varying vec3 vP; void main(){ vP = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
-      fragmentShader: `uniform vec3 top, bot, accent; uniform float time, stars; varying vec3 vP;
+      fragmentShader: `uniform vec3 top, bot, accent; uniform float time, stars, kaleido; varying vec3 vP;
         float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
         float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
           return mix(mix(h2(i), h2(i+vec2(1,0)), f.x), mix(h2(i+vec2(0,1)), h2(i+vec2(1,1)), f.x), f.y); }
@@ -79,6 +79,12 @@ export class World {
         vec2 swirl(vec2 p, vec2 c, float r, float k){ vec2 d = p - c; float l = length(d); float a = k * exp(-l*l/(r*r)); float s = sin(a), co = cos(a); return c + mat2(co, -s, s, co) * d; }
         void main(){
           vec2 p = vec2(atan(vP.x, -vP.z), vP.y * 2.2);
+          if (kaleido > 0.01) { // mirror the sky into spinning segments
+            float seg = 6.2831 / 8.0;
+            float a = mod(p.x + time * 0.4, seg); a = abs(a - seg * 0.5);
+            vec2 kp = vec2(a * 3.0, abs(p.y - 1.0) + time * 0.15);
+            p = mix(p, kp, kaleido);
+          }
           // Starry-Night vortices
           vec2 q = p * 1.5;
           q = swirl(q, vec2(0.0, 1.2), 0.6, 3.2 + sin(time * 0.25) * 0.6);
@@ -115,7 +121,23 @@ export class World {
     // backdrop "hero" objects per biome (moon, sun gear, ringed planet, earth)
     this.backdrops = BIOMES.map((b, i) => {
       const g = new THREE.Group();
-      if (i === 0) { g.add(mesh(new THREE.SphereGeometry(1, 24, 16), flat(0xfff6e0), 0, 0, 0, 38, 38, 38)); }
+      if (i === 0) { // PIZZA MOON with one slice orbiting
+        const gap = Math.PI / 4;
+        const crust = new THREE.Mesh(new THREE.CylinderGeometry(38, 38, 3, 48, 1, false, gap, Math.PI * 2 - gap), flat(0xd98a3a));
+        const cheese = new THREE.Mesh(new THREE.CylinderGeometry(34, 34, 3.4, 48, 1, false, gap, Math.PI * 2 - gap), flat(0xffd35a));
+        for (const c of [crust, cheese]) { c.rotation.x = Math.PI / 2; g.add(c); }
+        for (let k = 0; k < 10; k++) {
+          const a2 = gap + 0.3 + (k / 10) * (Math.PI * 2 - gap - 0.6), r = 10 + (k % 3) * 8;
+          const pep = new THREE.Mesh(new THREE.CylinderGeometry(4, 4, 3.8, 16), flat(0xc8262a)); pep.rotation.x = Math.PI / 2;
+          pep.position.set(Math.sin(a2) * r, Math.cos(a2) * r, 0.2); g.add(pep);
+        }
+        const slice = new THREE.Group();
+        const sc = new THREE.Mesh(new THREE.CylinderGeometry(38, 38, 3, 8, 1, false, 0, gap), flat(0xd98a3a));
+        const sch = new THREE.Mesh(new THREE.CylinderGeometry(34, 34, 3.4, 8, 1, false, 0, gap), flat(0xffd35a));
+        for (const c of [sc, sch]) { c.rotation.x = Math.PI / 2; slice.add(c); }
+        const sp = new THREE.Mesh(new THREE.CylinderGeometry(4, 4, 3.8, 16), flat(0xc8262a)); sp.rotation.x = Math.PI / 2; sp.position.set(Math.sin(gap / 2) * 20, Math.cos(gap / 2) * 20, 0.2); slice.add(sp);
+        slice.scale.setScalar(0.55); g.add(slice); g.userData.slice = slice;
+      }
       if (i === 1) { const gear = mesh(tor, flat(0xff7a00), 0, 0, 0, 60, 60, 60); g.add(gear); g.userData.spin = gear; }
       if (i === 2) {
         g.add(mesh(new THREE.SphereGeometry(1, 24, 16), toon(0xff2e88), 0, 0, 0, 55, 55, 55));
@@ -164,7 +186,10 @@ export class World {
   update(playerZ, dt, beatPhase, songTime) {
     this.skyU.time.value = songTime;
     this.sky.position.z = playerZ;
-    for (const b of this.backdrops) { b.position.z = playerZ - 300; if (b.userData.spin) b.userData.spin.rotation.z += dt * 0.2; }
+    for (const b of this.backdrops) {
+      b.position.z = playerZ - 300; if (b.userData.spin) b.userData.spin.rotation.z += dt * 0.2;
+      if (b.userData.slice) { const t = songTime * 0.5; b.userData.slice.position.set(Math.cos(t) * 62, Math.sin(t) * 62, 0); b.userData.slice.rotation.z = t * 2; }
+    }
     this.beatPulse = Math.pow(1 - beatPhase, 3);
 
     let crossed = false;

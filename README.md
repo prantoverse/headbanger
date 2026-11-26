@@ -12,6 +12,9 @@
 - **6 in a row** also loads a ricochet round that chains through the crowd.
 - **HEAT** rises every 25 seconds: faster running, more goons per group, new goon types, more obstacles.
 - Fever-dream backdrop: Starry-Night swirl skies and painterly brushwork under the comic ink, giant mechs blasting off from the roadside, huge eyes in the sky that follow you and wink, sky traffic, a colossal flying submarine, satellites.
+- Goofy chaos: bobblehead goons, disco-ball goons (4 beats of rainbow), pigeon swarms (COO!), giant rubber ducks blocking lanes, banana peels, Team-Rocket shotgun yeets, confetti every 10th headshot, Bangla comic SFX (ঢিশুম!).
+- GROOVE ZONE about once a minute: rainbow hue roll, wavy screen, kaleidoscope sky and an auto-wah on the music.
+- Sky oddities: a giant cat paw, floating moai heads, a jetpack whale spouting confetti, a sky DJ, and a pizza moon with an orbiting slice.
 - Four looping worlds: Neon Rooftops → Inside the Machine → Alien World → Orbital Station, each faster than the last.
 
 ## Controls

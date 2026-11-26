@@ -12,7 +12,7 @@ precision highp float;
 uniform sampler2D tColor;
 uniform sampler2D tDepth;
 uniform vec2 res;
-uniform float time, slow, impact, shift, speed, near, far, dotScale, hurt, paint;
+uniform float time, slow, impact, shift, speed, near, far, dotScale, hurt, paint, trip, beat;
 uniform vec3 inkCol, paperCol, shadowTint;
 varying vec2 vUv;
 
@@ -25,10 +25,16 @@ float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233))) * 43758.5453)
 float vnz(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
   return mix(mix(hash(i), hash(i+vec2(1,0)), f.x), mix(hash(i+vec2(0,1)), hash(i+vec2(1,1)), f.x), f.y); }
 vec3 srgb(vec3 c){ return pow(max(c, 0.0), vec3(1.0/2.2)); }
+vec3 hueShift(vec3 c, float a){ const vec3 k = vec3(0.57735); float ca = cos(a); return c * ca + cross(k, c) * sin(a) + k * dot(k, c) * (1.0 - ca); }
 
 void main(){
   vec2 px = 1.0 / res;
   vec2 uv = vUv;
+  // GROOVE: gentle wavy warp + breathing zoom on the beat
+  if (trip > 0.01) {
+    uv += vec2(sin(uv.y * 9.0 + time * 2.2), cos(uv.x * 7.0 + time * 1.7)) * 0.006 * trip;
+    uv = (uv - 0.5) * (1.0 - beat * 0.03 * trip) + 0.5;
+  }
 
   // --- CMY misregistration (print offset) ---
   vec2 dir = normalize(vec2(1.0, 0.6));
@@ -63,6 +69,9 @@ void main(){
   vec3 duo = mix(vec3(0.05, 0.02, 0.12), vec3(0.0, 0.9, 1.0), smoothstep(0.05, 0.75, L));
   duo = mix(duo, paperCol, smoothstep(0.78, 1.0, L));
   col = mix(col, duo, slow * 0.72);
+
+  // GROOVE: rainbow hue roll sweeping across the screen
+  if (trip > 0.01) col = mix(col, hueShift(col, time * 1.6 + (vUv.x + vUv.y) * 3.0), trip * 0.7);
 
   // ink
   col = mix(col, inkCol, edge);
@@ -104,7 +113,7 @@ export class ComicPost {
       uniforms: {
         tColor: { value: this.rt.texture }, tDepth: { value: this.rt.depthTexture },
         res: { value: size.clone() }, time: { value: 0 }, slow: { value: 0 }, impact: { value: 0 },
-        shift: { value: 1.5 }, speed: { value: 0 }, hurt: { value: 0 }, paint: { value: 1 },
+        shift: { value: 1.5 }, speed: { value: 0 }, hurt: { value: 0 }, paint: { value: 1 }, trip: { value: 0 }, beat: { value: 0 },
         near: { value: camera.near }, far: { value: camera.far },
         dotScale: { value: 6.5 * Math.max(1, renderer.getPixelRatio()) },
         inkCol: { value: new THREE.Color(0x0b0410) },
