@@ -1,5 +1,5 @@
 // Giant weird background set pieces that roll past every so often:
-// fever-dream set pieces: mechs, sky eyes, sky traffic, a huge sub, satellites, a cat paw, moai heads, a jetpack whale, a sky DJ.
+// fever-dream set pieces: mechs, sky eyes, sky traffic, a huge sub, satellites, a cat paw, moai heads, a jetpack whale, a sky DJ, a floating croc in a floatie.
 import * as THREE from 'three';
 import { toon, flat } from './world.js';
 import { isGrid } from './style.js';
@@ -194,6 +194,41 @@ function buildWhale() {
   g.userData = { tail, flames };
   return g;
 }
+function buildCroc(grid) {
+  // a fat, happy crocodile floating through the sky in a pool floatie, chomping on the beat
+  const g = new THREE.Group();
+  const skin = toon(grid ? 0x161a3e : 0x3fae3a), belly = toon(grid ? 0x2a2e5a : 0xd8e86a), dark = toon(grid ? 0x0d1030 : 0x2a7a2a);
+  const tooth = flat(0xffffff), trim = flat(grid ? 0xff2ea8 : 0x2a7a2a);
+  g.add(m(SPH, skin, 0, 0, 0, 12, 3.4, 4.6), m(SPH, belly, 0.5, -1.7, 0, 10.5, 2, 3.8));
+  for (let x = -9; x <= 7; x += 2.2) { const r = m(CONE, dark, x, 3.1, 0, 0.9, 1.3, 0.9); g.add(r); } // back ridges
+  if (grid) g.add(m(BOX, trim, 0, 0.2, 4.4, 22, 0.12, 0.12), m(BOX, trim, 0, 0.2, -4.4, 22, 0.12, 0.12));
+  // head: skull + long upper snout, hinged lower jaw
+  const head = new THREE.Group(); head.position.set(10.5, 0.6, 0); g.add(head);
+  head.add(m(BOX, skin, 2.5, 0.2, 0, 5.5, 2.4, 4), m(BOX, skin, 7.6, 0.1, 0, 6.5, 1.2, 2.9));
+  head.add(m(SPH, dark, 10.6, 0.6, 0.7, 0.35, 0.25, 0.3), m(SPH, dark, 10.6, 0.6, -0.7, 0.35, 0.25, 0.3)); // nostrils
+  for (let x = 5; x <= 10.4; x += 0.9) for (const z of [-1.3, 1.3]) { const t = m(CONE, tooth, x, -0.75, z, 0.22, 0.6, 0.22); t.rotation.x = Math.PI; head.add(t); }
+  const jaw = new THREE.Group(); jaw.position.set(0.5, -1.0, 0); head.add(jaw);
+  jaw.add(m(BOX, belly, 4.8, -0.3, 0, 9.6, 0.8, 2.7));
+  for (let x = 5; x <= 9.6; x += 0.9) for (const z of [-1.15, 1.15]) jaw.add(m(CONE, tooth, x, 0.35, z, 0.2, 0.55, 0.2));
+  jaw.add(m(BOX, flat(0xff6a8a), 4.5, 0.12, 0, 7, 0.1, 2)); // pink mouth
+  for (const z of [-1.5, 1.5]) { // big googly eyes on top
+    head.add(m(SPH, skin, 1.8, 1.7, z, 1.1, 1.1, 1.1), m(SPH, flat(grid ? 0xff1f3d : 0xffe600), 2.3, 2.0, z * 1.15, 0.75, 0.75, 0.75));
+    head.add(m(BOX, flat(0x0b0410), 2.85, 2.0, z * 1.15, 0.12, 0.8, 0.25));
+  }
+  // tail
+  const tail = new THREE.Group(); tail.position.set(-11, 0, 0); g.add(tail);
+  tail.add(m(SPH, skin, -3.5, 0, 0, 5, 2, 2.6));
+  const tip = m(CONE, skin, -9, 0, 0, 1.6, 6, 1.6); tip.rotation.z = Math.PI / 2; tail.add(tip);
+  for (let x = -2; x >= -8; x -= 2) tail.add(m(CONE, dark, x, 1.6 + x * 0.12, 0, 0.6, 0.9, 0.6));
+  // stubby paddling legs
+  const legs = [];
+  for (const [x, z] of [[6, 3.8], [6, -3.8], [-6, 3.8], [-6, -3.8]]) { const l = new THREE.Group(); l.position.set(x, -1.5, z); l.add(m(BOX, skin, 0, -1.2, 0, 1.4, 2.6, 1.4), m(BOX, dark, 0.5, -2.6, 0, 2.2, 0.5, 1.6)); g.add(l); legs.push(l); }
+  // pool floatie
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(5.4, 1.5, 10, 28), grid ? flat(0x2ef2ff) : toon(0xff6ab4)); ring.rotation.y = Math.PI / 2; ring.position.x = 1; g.add(ring);
+  if (!grid) for (let k = 0; k < 4; k++) { const st = new THREE.Mesh(new THREE.TorusGeometry(5.4, 1.55, 10, 4, 0.5), toon(0xffffff)); st.rotation.set(0, Math.PI / 2, k * Math.PI / 2); st.position.x = 1; g.add(st); }
+  g.userData = { jaw, tail, legs, head };
+  return g;
+}
 function buildDJ() {
   const g = new THREE.Group();
   const booth = toon(0x1c1c28), neon = flat(0xff2e88), cyan = flat(0x00e5ff), red = toon(0xff2418);
@@ -246,7 +281,7 @@ export class SetPieces {
 
   spawn(type, z) {
     const g = new THREE.Group(); g.position.z = z; this.scene.add(g);
-    if (this.world) this.world.clearZones.push(['paw', 'whale', 'dj', 'eyes'].includes(type) ? [z - 260, z + 60] : [z - 110, z + 25]);
+    if (this.world) this.world.clearZones.push(['paw', 'whale', 'dj', 'eyes', 'croc'].includes(type) ? [z - 260, z + 60] : [z - 110, z + 25]);
     const it = { type, obj: g, z, t: 0, parts: [] };
     if (type === 'mechs') {
       // giant mechs crouched beside the route; they blast off as you approach
@@ -304,6 +339,7 @@ export class SetPieces {
       }
     }
     if (type === 'whale') { const wh = buildWhale(); wh.position.set(-26, 44, 0); wh.scale.setScalar(1.3); g.add(wh); it.parts.push({ wh }); it.follow = 120; it.life = 16; it.spout = 0; it.bits = []; }
+    if (type === 'croc') { const cr = buildCroc(isGrid()); const gy = isGrid() ? 20 : 30; cr.position.set(-46, gy, 0); cr.rotation.y = 0.35; cr.scale.setScalar(1.15); g.add(cr); it.parts.push({ cr, gy }); it.follow = 72; it.life = 16; }
     if (type === 'dj') { const dj = buildDJ(); dj.position.set(0, 34, 0); dj.scale.setScalar(1.8); g.add(dj); it.parts.push({ dj }); it.follow = 115; it.life = 13; }
     if (type === 'bikes') { // light bikes racing alongside you, dragging light walls
       const cols = [0x00e5ff, 0xff7a00, 0xff1f3d, 0xffffff];
@@ -328,7 +364,7 @@ export class SetPieces {
     for (const it of this.items) it.lookX = playerX;
     // a new oddity roughly every 130m
     if (playerZ < this.nextAt) {
-      const types = (isGrid() ? ['bikes', 'rings', 'satellites', 'bikes', 'rings', 'mechs'] : ['mechs', 'eyes', 'satellites', 'submarine', 'sedan', 'paw', 'moai', 'whale', 'dj', 'mechs', 'eyes', 'paw', 'whale', 'dj']).filter((t) => t !== this.last);
+      const types = (isGrid() ? ['bikes', 'rings', 'satellites', 'bikes', 'rings', 'mechs', 'croc'] : ['mechs', 'eyes', 'satellites', 'submarine', 'sedan', 'paw', 'moai', 'whale', 'dj', 'croc', 'mechs', 'eyes', 'paw', 'whale', 'dj', 'croc']).filter((t) => t !== this.last);
       const type = types[Math.floor(Math.random() * types.length)];
       this.last = type; this.spawn(type, playerZ - 185);
       this.nextAt = playerZ - 150;
@@ -417,6 +453,15 @@ export class SetPieces {
           }
         }
         for (let j = it.bits.length - 1; j >= 0; j--) { const q = it.bits[j]; q.life -= dt; q.v.y -= 12 * dt; q.b.position.addScaledVector(q.v, dt); q.b.rotation.x += dt * 6; if (q.life <= 0) { it.obj.remove(q.b); it.bits.splice(j, 1); } }
+      }
+      if (it.type === 'croc') {
+        const c = it.parts[0].cr, u = c.userData;
+        c.position.x += dt * 5.5; c.position.y = it.parts[0].gy + Math.sin(it.t * 0.8) * 2.2;
+        c.rotation.x = Math.sin(it.t * 0.6) * 0.12; c.rotation.z = Math.sin(it.t * 0.9) * 0.06;
+        u.jaw.rotation.z = -(0.08 + beatPulse * 0.55);          // CHOMP on the beat
+        u.head.rotation.z = beatPulse * 0.08;
+        u.tail.rotation.y = Math.sin(step * 3) * 0.4;
+        u.legs.forEach((l, k) => (l.rotation.z = Math.sin(step * 7 + k * 1.6) * 0.6)); // doggy paddle
       }
       if (it.type === 'dj') {
         const u = it.parts[0].dj.userData;
