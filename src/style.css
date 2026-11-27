@@ -186,12 +186,16 @@ h2{font-size:72px;color:var(--red);-webkit-text-stroke:3px var(--ink);text-shado
 
 /* ---------- GRID theme ---------- */
 body.grid .screen{background:radial-gradient(circle at 50% 120%,#00e5ff33,transparent 60%),repeating-linear-gradient(#00e5ff12 0 1px,transparent 1px 28px),repeating-linear-gradient(90deg,#00e5ff12 0 1px,transparent 1px 28px),#02030acc}
-body.grid .panel{background:#05060cf2;color:#d8f6ff;border-color:#00e5ff;box-shadow:0 0 0 2px #00e5ff44,0 0 40px #00e5ff44;transform:none}
-body.grid h1{font-family:'Orbitron',sans-serif;font-weight:900;color:#fff;-webkit-text-stroke:0;text-shadow:0 0 10px #00e5ff,0 0 26px #00e5ff;transform:none;font-size:min(9vw,60px);letter-spacing:.06em}
+body.grid .panel{max-width:min(720px,96vw);overflow-x:hidden;background:#05060cf2;color:#d8f6ff;border-color:#00e5ff;box-shadow:0 0 0 2px #00e5ff44,0 0 40px #00e5ff44;transform:none}
+body.grid h1{font-family:'Orbitron',sans-serif;font-weight:900;color:#fff;-webkit-text-stroke:0;text-shadow:0 0 10px #00e5ff,0 0 26px #00e5ff;transform:none;font-size:clamp(22px,6.4vw,50px);letter-spacing:.02em;white-space:nowrap}
 body.grid h1 span{color:#ff1f3d;text-shadow:0 0 10px #ff1f3d,0 0 26px #ff1f3d}
 body.grid .tag,body.grid .sp-title{color:#7fdfff}
 body.grid .panel button#btn-play,body.grid .panel button#btn-again{font-family:'Orbitron',sans-serif;background:#00e5ff;color:#02030a;border-color:#00e5ff;box-shadow:0 0 22px #00e5ff;transform:none}
-body.grid #score{color:#fff;-webkit-text-stroke:0;text-shadow:0 0 10px #00e5ff;font-family:'Orbitron',sans-serif;font-size:36px}
+body.grid #score{color:#fff;-webkit-text-stroke:0;text-shadow:0 0 10px #00e5ff;font-family:'Orbitron',sans-serif;font-size:clamp(20px,5vw,30px);line-height:1.15}
+body.grid #score-box{transform:none;top:max(22px,env(safe-area-inset-top));left:18px;max-width:46vw}
+body.grid #combo{font-family:'Orbitron',sans-serif;font-size:18px;margin-top:2px}
+body.grid #weapon-name{max-width:60vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.panel{overflow-x:hidden}
 body.grid #combo{color:#00e5ff;text-shadow:0 0 8px #00e5ff;-webkit-text-stroke:0}
-body.grid #weapon-name{font-family:'Orbitron',sans-serif;font-size:20px;color:#fff;text-shadow:0 0 8px #00e5ff;-webkit-text-stroke:0}
+body.grid #weapon-name{font-family:'Orbitron',sans-serif;font-size:clamp(14px,3.6vw,20px);color:#fff;text-shadow:0 0 8px #00e5ff;-webkit-text-stroke:0}
 body.grid h2{font-family:'Orbitron',sans-serif;color:#ff1f3d;text-shadow:0 0 14px #ff1f3d;-webkit-text-stroke:0}
