@@ -273,6 +273,10 @@ export class AudioEngine {
         this._tone(t, { type: 'square', f0: 220, f1: 80, dur: 0.05, vol: 0.3, dist: true }); break;
       case 'slash':
         this._noise(t, { dur: 0.18, type: 'bandpass', freq: 6000, sweep: 1200, q: 2, vol: 0.6 }); break;
+      case 'shuriken':
+        this._noise(t, { dur: 0.16, type: 'bandpass', freq: 5000, sweep: 9000, q: 4, vol: 0.4 }); this._tone(t, { type: 'triangle', f0: 3200, f1: 2600, dur: 0.06, vol: 0.12 }); break;
+      case 'bonk':
+        this._tone(t, { type: 'triangle', f0: 420, f1: 180, dur: 0.12, vol: 0.7 }); this._noise(t, { dur: 0.08, type: 'bandpass', freq: 1400, q: 2, vol: 0.8 }); break;
       case 'punch':
         this._tone(t, { f0: 140, f1: 50, dur: 0.12, vol: 0.9 }); this._noise(t, { dur: 0.05, freq: 900, vol: 0.5 }); break;
       case 'throw':

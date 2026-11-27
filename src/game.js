@@ -15,7 +15,9 @@ export const WEAPONS = {
   shotgun: { name: 'SHOTGUN', ammo: 4, rate: 0.45, sfx: 'shotgun', spread: 2.8 },
   smg: { name: 'MACHINE PISTOL', ammo: 30, rate: 0.085, sfx: 'smg', auto: true },
   sword: { name: 'KATANA', ammo: Infinity, rate: 0.25, sfx: 'slash', melee: 11 },
-  fists: { name: 'FISTS', ammo: Infinity, rate: 0.3, sfx: 'punch', melee: 5 },
+  bat: { name: 'BASEBALL BAT', ammo: Infinity, rate: 0.32, sfx: 'bonk', melee: 10 },
+  stars: { name: 'SHURIKEN', ammo: 14, rate: 0.11, sfx: 'shuriken' },
+  fists: { name: 'FISTS', ammo: Infinity, rate: 0.22, sfx: 'punch', melee: 9 },
 };
 
 // Superhot-style hot reds/oranges so goons pop against the purple/blue worlds
@@ -24,6 +26,8 @@ const ENEMY = {
   smg: { jacket: 0xff3a1c, pants: 0xe02412, weapon: 'smg', score: 120 },
   shotgun: { jacket: 0xf01a14, pants: 0xc8120c, weapon: 'shotgun', score: 150 },
   sword: { jacket: 0xff4a20, pants: 0xe03014, weapon: 'sword', score: 130 },
+  bat: { jacket: 0xff5a28, pants: 0xd83a14, weapon: 'bat', score: 130 },
+  ninja: { jacket: 0xe8141e, pants: 0xb00c14, weapon: 'stars', score: 170 },
 };
 const hotCache = new Map();
 function hot(color) { // toon + self-glow so they stay bright in dark biomes
@@ -37,12 +41,29 @@ function hot(color) { // toon + self-glow so they stay bright in dark biomes
 const TETRA = new THREE.TetrahedronGeometry(1, 0);
 const DISCO_MAT = (() => { const m = new THREE.MeshToonMaterial({ color: 0xd8e0ff, gradientMap: toon(0xd8e0ff).gradientMap, flatShading: true }); m.emissive = new THREE.Color(0x404860); return m; })();
 
+// 4-point throwing star
+function buildShuriken(size = 0.3) {
+  const g = new THREE.Group(), steel = flat(0xd8e0ff), dark = flat(0x2a2a36);
+  for (let k = 0; k < 2; k++) { const b = new THREE.Mesh(BOX, steel); b.scale.set(size * 2.4, size * 0.5, size * 0.12); b.rotation.z = k * Math.PI / 2; g.add(b); }
+  for (let k = 0; k < 2; k++) { const b = new THREE.Mesh(BOX, steel); b.scale.set(size * 1.5, size * 0.35, size * 0.1); b.rotation.z = Math.PI / 4 + k * Math.PI / 2; g.add(b); }
+  const hub = new THREE.Mesh(BOX, dark); hub.scale.set(size * 0.45, size * 0.45, size * 0.16); g.add(hub);
+  return g;
+}
+
 function buildWeaponModel(type, scale = 1) {
   const g = new THREE.Group();
   const dark = toon(0x4a4a66), metal = toon(0xb8c2da), acc = flat(0xffe600);
   if (type === 'pistol') { g.add(box(dark, 0.09, 0.12, 0.34, 0, 0.03, -0.1), box(dark, 0.08, 0.2, 0.1, 0, -0.1, 0.02), box(acc, 0.1, 0.02, 0.05, 0, 0.1, -0.24)); }
   if (type === 'smg') { g.add(box(toon(0x3a2a5a), 0.1, 0.14, 0.42, 0, 0.03, -0.12), box(dark, 0.08, 0.26, 0.09, 0, -0.14, -0.06), box(acc, 0.11, 0.02, 0.05, 0, 0.11, -0.3)); }
   if (type === 'shotgun') { g.add(box(toon(0x5a3420), 0.12, 0.14, 0.7, 0, 0.02, -0.2), box(metal, 0.07, 0.07, 0.6, 0, 0.1, -0.3), box(toon(0x5a3420), 0.1, 0.2, 0.14, 0, -0.1, 0.12)); }
+  if (type === 'stars') g.add(buildShuriken(0.16));
+  if (type === 'bat') { // tapered wooden bat with grip tape
+    const wood = toon(0xd9a066);
+    const barrel = new THREE.Mesh(CYL, wood); barrel.scale.set(0.065, 0.55, 0.065); barrel.rotation.x = Math.PI / 2; barrel.position.z = -0.62; g.add(barrel);
+    const handle = new THREE.Mesh(CYL, wood); handle.scale.set(0.035, 0.45, 0.035); handle.rotation.x = Math.PI / 2; handle.position.z = -0.15; g.add(handle);
+    const tape = new THREE.Mesh(CYL, toon(0x14101e)); tape.scale.set(0.04, 0.2, 0.04); tape.rotation.x = Math.PI / 2; tape.position.z = 0.0; g.add(tape);
+    g.add(box(flat(0xff2e88), 0.09, 0.03, 0.03, 0, 0, 0.1));
+  }
   if (type === 'sword') { g.add(box(flat(0xfff6e0), 0.04, 0.09, 1.1, 0, 0, -0.6), box(toon(0xff2e88), 0.05, 0.08, 0.26, 0, 0, 0.08), box(acc, 0.2, 0.04, 0.04, 0, 0, -0.06)); }
   if (type === 'fists') { g.add(box(toon(0xffc9a0), 0.16, 0.12, 0.16, 0, 0, -0.05), box(flat(0xff2e88), 0.17, 0.05, 0.17, 0, 0.04, -0.05)); }
   g.scale.setScalar(scale);
@@ -104,6 +125,13 @@ function buildEnemy(type) {
   const hHead = new THREE.Mesh(BOX, hitMat); hHead.scale.set(0.62, 0.62, 0.62); hHead.position.set(0, 1.86, 0); hHead.userData.part = 'head';
   const hBody = new THREE.Mesh(BOX, hitMat); hBody.scale.set(1.0, 1.55, 0.8); hBody.position.set(0, 0.85, 0); hBody.userData.part = 'body';
   g.add(hHead, hBody);
+  if (type === 'ninja') {
+    const blk = toon(0x14101e);
+    const band = new THREE.Mesh(BOX, blk); band.scale.set(0.42, 0.08, 0.42); band.position.y = 0.04; head.add(band);
+    for (const s2 of [-1, 1]) { const tail = new THREE.Mesh(BOX, blk); tail.scale.set(0.05, 0.3, 0.04); tail.position.set(s2 * 0.06, -0.1, 0.24); tail.rotation.x = 0.5; head.add(tail); }
+    const scarf = new THREE.Mesh(BOX, blk); scarf.scale.set(0.36, 0.1, 0.3); scarf.position.y = 0.55; torso.add(scarf);
+    const rope = new THREE.Mesh(CYL, toon(0x3a2a1a)); rope.scale.set(0.03, 40, 0.03); rope.position.y = -20; g.add(rope); // up into the sky (flipped)
+  }
   g.userData = { torso, head, legL, legR, armR, armL, gun, hHead, hBody };
   g.scale.setScalar(type === 'shotgun' ? 1.28 : 1.15);
   return g;
@@ -137,7 +165,7 @@ export class Game {
     this.marks = []; this.markGroup.clear();
     this.p = {
       z: 0, x: 0, lane: 1, y: 0, vy: 0, slide: 0, wall: 0, wallSide: 0, roll: 0,
-      armor: 2, regen: 0, heals: 0, dead: false, invuln: 0, spin: 0,
+      armor: 2, regen: 0, heals: 0, dead: false, invuln: 0, spin: 0, swing: 0, lunge: 0, punchSide: 1,
       weapon: 'pistol', ammo: WEAPONS.pistol.ammo, cool: 0, kick: 0,
     };
     this.speed = 11;
@@ -180,7 +208,9 @@ export class Game {
     m.position.set(0.22, -0.21, -0.52);
     m.rotation.set(0.04, 0.2, -0.05);
     if (type === 'sword') { gun.rotation.set(1.1, 0, 0); gun.position.set(0, 0.02, -0.02); m.position.set(0.24, -0.24, -0.5); }
-    if (type === 'fists') { const l = arm(); l.add(buildWeaponModel('fists', 0.55)); l.position.set(-0.2, -0.2, -0.5); l.rotation.y = -0.16; this.viewmodel.add(l); m.add(buildWeaponModel('fists', 0.55)); }
+    if (type === 'bat') { gun.rotation.set(1.25, 0, 0.2); gun.position.set(0, 0.02, -0.02); m.position.set(0.26, -0.26, -0.5); }
+    this.vmL = null;
+    if (type === 'fists') { const l = arm(); l.add(buildWeaponModel('fists', 0.55)); l.position.set(-0.2, -0.2, -0.5); l.rotation.y = -0.16; this.viewmodel.add(l); this.vmL = l; m.add(buildWeaponModel('fists', 0.55)); }
     this.viewmodel.add(m); this.vm = m;
     this.ui.setWeapon(WEAPONS[type].name, ammo, WEAPONS[type].ammo);
   }
@@ -268,9 +298,19 @@ export class Game {
 
     if (W.melee) {
       p.cool = W.rate;
+      p.swing = 1; p.punchSide = -(p.punchSide || 1); // alternate jabs / swing direction
       if (t && t.enemy && t.enemy.obj.position.z > p.z - W.melee && t.enemy.obj.position.z < p.z + 0.5) {
-        this.audio.sfx(W.sfx); this.vmKick(0.6);
-        this.killEnemy(t.enemy, t.part, { melee: true, point: t.point });
+        const e = t.enemy;
+        this.audio.sfx(W.sfx); this.vmKick(0.6); this.haptics(30);
+        p.lunge = 0.18; this.impact = 0.6; // dash in + impact frame
+        if (p.weapon === 'fists') {
+          // DISARM: knock 'em out and take their weapon
+          const stolen = ENEMY[e.type].weapon;
+          this.killEnemy(e, t.part, { melee: true, punch: true, point: t.point });
+          this.setWeapon(stolen, WEAPONS[stolen].ammo);
+          const s2 = this.toScreen(t.point);
+          this.ui.pop('DISARMED! +' + WEAPONS[stolen].name, s2.x, s2.y + 40, '#00e5ff', 32);
+        } else this.killEnemy(e, t.part, { melee: true, bat: p.weapon === 'bat', point: t.point });
       } else { this.audio.sfx('throw'); this.vmKick(0.3); }
       return;
     }
@@ -411,12 +451,12 @@ export class Game {
   // ------------------------------------------------------------ combat helpers
   muzzlePos() { return (this.vm || this.camera).localToWorld(new THREE.Vector3(0, 0.06, -0.4)); }
   onScreen(e) {
-    this.tmpV.copy(e.obj.position); this.tmpV.y += 1.3; this.tmpV.project(this.camera);
+    this.tmpV.copy(e.obj.position); this.tmpV.y += e.type === 'ninja' ? -1.3 : 1.3; this.tmpV.project(this.camera);
     return this.tmpV.z < 1 && Math.abs(this.tmpV.x) < 0.95 && Math.abs(this.tmpV.y) < 0.95;
   }
   // red Superhot laser sight from a goon's gun to you; flares right before the shot
   updateLaser(e, dz) {
-    const armed = e.alive && e.landed && !e.passive && e.type !== 'sword' && dz > 8 && dz < 24 && this.onScreen(e) && !this.bulletTime;
+    const armed = e.alive && e.landed && !e.passive && e.type !== 'ninja' && !(e.type === 'sword' || e.type === 'bat') && dz > 8 && dz < 24 && this.onScreen(e) && !this.bulletTime;
     if (!armed) { if (e.laser) e.laser.visible = false; return; }
     if (!e.laser) {
       e.laser = new THREE.Mesh(BOX, new THREE.MeshBasicMaterial({ color: 0xff1f3d, transparent: true, opacity: 0.3, depthWrite: false, fog: false }));
@@ -458,7 +498,7 @@ export class Game {
     this.stats.kills++; if (head) this.stats.heads++; if (beat) this.stats.beats++;
     const pos = e.obj.position.clone().setY(head ? 1.8 : 1.2);
     const s = this.toScreen(pos);
-    const words = opt.melee ? ['SLASH!', 'THWACK!', 'KRAK!'] : opt.thrown ? ['BONK!', 'CATCH!', 'YOINK!'] : head ? ['BLAM!', 'HEADSHOT!', 'BOOM!'] : ['BANG!', 'POW!', 'BLAT!'];
+    const words = opt.punch ? ['POW!', 'WHAM!', 'KAPOW!'] : opt.bat ? ['BONK!', 'CRACK!', 'THWOK!'] : opt.melee ? ['SLASH!', 'THWACK!', 'KRAK!'] : opt.thrown ? ['BONK!', 'CATCH!', 'YOINK!'] : head ? ['BLAM!', 'HEADSHOT!', 'BOOM!'] : ['BANG!', 'POW!', 'BLAT!'];
     let w = words[Math.floor(Math.random() * words.length)];
     if (Math.random() < 0.18) w = ['BONK!', 'YEET!', 'SPLORT!', 'OOF!', 'BWAMP!', 'ঢিশুম!', 'ধুম!', 'ঠাস!', 'ধপাস!'][Math.floor(Math.random() * 9)];
     if (head && e.bobble) { w = 'POP!'; this.audio.sfx('pop'); }
@@ -489,6 +529,13 @@ export class Game {
       this.goofy.confetti(opt.point || pos, 120);
       this.ui.pop('PARTY!', s.x, s.y - 70, '#9dff3c', 54, true);
       this.scene.remove(e.obj); e.shattered = true; if (e.laser) { this.scene.remove(e.laser); e.laser = null; }
+    } else if (opt.bat) {
+      // HOME RUN: knocked out of the park, into a twinkle
+      e.toss = true; e.deadT = 0;
+      e.vel = new THREE.Vector3((Math.random() - 0.5) * 6, 30, -42);
+      e.spin = new THREE.Vector3(12, 4, 8);
+      this.ui.pop('HOME RUN!', innerWidth / 2, innerHeight * 0.32, '#ffe600', 66, true);
+      this.addScore(100);
     } else if (opt.shotgun && !head && Math.random() < 0.5) {
       // Team-Rocket toss: blasted off into the sky until they twinkle
       e.toss = true; e.deadT = 0;
@@ -513,7 +560,7 @@ export class Game {
       this.ui.setStreak(this.headStreak % 3 || (this.focusCharges ? 3 : 0), !!this.focusCharges);
     }
     // drop weapon (not for throw kills — you catch it)
-    if (!opt.thrown && !opt.melee) this.dropPickup(ENEMY[e.type].weapon, e.obj.position);
+    if (!opt.thrown && !opt.melee) this.dropPickup(ENEMY[e.type].weapon, e.type === 'ninja' ? e.obj.position.clone().setY(1.2) : e.obj.position);
     this.ui.setScore(this.score, this.combo);
   }
 
@@ -596,7 +643,7 @@ export class Game {
   hurt(src) {
     const p = this.p;
     if (p.invuln > 0 || p.dead) return;
-    const CAUSE = { bullet: 'SHOT!', slash: 'SLASHED!', bump: 'BODY-CHECKED!', rocket: 'ROCKET!', barrier: 'BARRIER!', duck: 'DUCKED!' };
+    const CAUSE = { bullet: 'SHOT!', shuriken: "SHURIKEN'D!", bonk: 'BONKED!', slash: 'SLASHED!', bump: 'BODY-CHECKED!', rocket: 'ROCKET!', barrier: 'BARRIER!', duck: 'DUCKED!' };
     const label = CAUSE[src] || 'HIT!';
     this.lastCause = label;
     if (this.mode === 'tutorial') {
@@ -622,6 +669,7 @@ export class Game {
     const z = this.p.z - zAhead;
     obj.position.set(x, elevated + 9, z);
     obj.rotation.y = 0;
+    if (type === 'ninja') obj.rotation.z = Math.PI; // head down, legs up
     this.scene.add(obj);
     const en = { obj, type, alive: true, landed: false, landBeat, baseY: elevated, fireOffset: Math.floor(Math.random() * 2), rushing: false, t: 0, burst: 0, passive };
     if (this.mode === 'run') {
@@ -647,7 +695,8 @@ export class Game {
     const diff = Math.min(1, (H - 1) / 7);
     const pool = ['pistol'];
     if (H >= 2) pool.push('smg');
-    if (H >= 3) pool.push('sword', 'pistol');
+    if (H >= 3) pool.push('sword', 'bat', 'pistol', 'ninja');
+    if (H >= 5) pool.push('ninja');
     if (H >= 4) pool.push('shotgun');
     if (H >= 6) pool.push('smg', 'shotgun');
     // gentle ramp: 1 goon early, up to 3 per bar later, never more than 5 alive ahead
@@ -663,11 +712,12 @@ export class Game {
     for (let i = 0; i < n; i++) {
       const type = pool[Math.floor(Math.random() * pool.length)];
       const zA = zBase + i * 2.5 + Math.random() * 3;
+      if (type === 'ninja') { this.spawnEnemy('ninja', LANES[Math.floor(Math.random() * 3)] + (Math.random() - 0.5) * 1.2, zA, barBeat + 1 + (i % 3), 4.7); continue; }
       let x, elev = 0;
       const r = Math.random();
       // only spots you can actually see: a lane, the corridor edge, or on top of a wall
       const SPOTS = [-3.0, -2.2, -1.1, 0, 1.1, 2.2, 3.0]; // all inside the corridor, in front of the walls
-      if (type === 'sword') x = LANES[Math.floor(Math.random() * 3)];
+      if (type === 'sword' || type === 'bat') x = LANES[Math.floor(Math.random() * 3)];
       else x = SPOTS[Math.floor(Math.random() * SPOTS.length)];
       const key = Math.round(x) + ':' + elev;
       if (used.has(key)) continue; used.add(key);
@@ -769,16 +819,17 @@ export class Game {
     for (const e of this.enemies) {
       if (!e.alive || !e.landed || e.passive) continue;
       const dz = this.p.z - e.obj.position.z;
-      if (dz < 8 || dz > 24 || Math.abs(e.obj.position.x) > 3.3 || e.obj.position.y > 1 || !this.onScreen(e)) continue;
+      if (dz < 8 || dz > 24 || Math.abs(e.obj.position.x) > 3.3 || (e.obj.position.y > 1 && e.type !== 'ninja') || !this.onScreen(e)) continue;
       if (inBeat === 3) e.warn = 0.2; // laser flares a 16th before the beat
       if (e.type === 'pistol' && inBeat === 0 && (this.heat >= 7 || (beatIdx + e.fireOffset) % 2 === 0)) this.enemyFire(e, 1);
       if (e.type === 'shotgun' && inBeat === 0 && beatIdx % 4 === (e.fireOffset ? 2 : 0) && dz < 30) this.enemyFire(e, 3);
+      if (e.type === 'ninja' && inBeat % 2 === 0 && (beatIdx + e.fireOffset) % 2 === 0 && inBeat < 3) this.enemyFire(e, 1, true); // double-throw
       if (e.type === 'smg' && (e.tut ? beatIdx % 2 === 0 : beatIdx % 4 === 2 + e.fireOffset) && inBeat < 3) this.enemyFire(e, 1);
-      if (e.type === 'sword' && inBeat === 0 && dz < 30) e.rushing = true;
+      if ((e.type === 'sword' || e.type === 'bat') && inBeat === 0 && dz < 30) e.rushing = true;
     }
   }
 
-  enemyFire(e, pellets) {
+  enemyFire(e, pellets, star = false) {
     const p = this.p;
     e.warn = 0.18;
     const muzzle = e.obj.userData.gun.getWorldPosition(new THREE.Vector3());
@@ -790,6 +841,11 @@ export class Game {
       const target = new THREE.Vector3(lx, ty, targetZ);
       const vel = target.clone().sub(muzzle).divideScalar(T);
       const m = new THREE.Group();
+      if (star) { // spinning shuriken
+        const sh = buildShuriken(0.22); m.add(sh); m.position.copy(muzzle); this.scene.add(m);
+        this.bullets.push({ obj: m, vel, t: 0, T, prevZ: muzzle.z, passed: false, star: sh, src: 'shuriken' });
+        continue;
+      }
       const core = new THREE.Mesh(SPH, flat(0xfff6e0)); core.scale.set(0.16, 0.16, 0.16);
       const trail = new THREE.Mesh(BOX, flat(0xff1f3d)); trail.scale.set(0.09, 0.09, 1.4); trail.position.z = -0.7;
       const tg = new THREE.Group(); tg.add(core, trail); m.add(tg);
@@ -798,7 +854,7 @@ export class Game {
       this.bullets.push({ obj: m, vel, t: 0, T, prevZ: muzzle.z, passed: false });
     }
     e.recoil = 1;
-    this.audio.sfx('enemyShot');
+    this.audio.sfx(star ? 'shuriken' : 'enemyShot');
   }
 
   // ------------------------------------------------------------ main update
@@ -873,6 +929,9 @@ export class Game {
     const slideY = p.slide > 0 ? -0.85 : 0;
     const bob = p.y === 0 && p.slide <= 0 ? Math.sin(this.time * 14) * 0.04 : 0;
     this.camera.position.set(p.x, 1.6 + p.y + slideY + bob, p.z);
+    // melee lunge: a quick dash forward
+    if (p.lunge > 0) { p.z -= 34 * Math.min(p.lunge, realDt); p.lunge -= realDt; }
+    if (p.swing > 0) p.swing = Math.max(0, p.swing - realDt * 6);
     // banana slip: a quick cartoon wobble (decaying), not a full roll
     if (p.spin > 0) p.spin = Math.max(0, p.spin - realDt * 1.6);
     const slip = p.spin > 0 ? Math.sin(p.spin * 22) * 0.22 * p.spin : 0;
@@ -897,6 +956,14 @@ export class Game {
       this.vm.rotation.x = Math.atan2(vy, Math.hypot(vx, vz)) + p.kick * 0.45;
       this.vm.rotation.z = -0.05 - this.aimS.x * 0.15;
       this.vm.position.set(gx, gy, -0.5 + p.kick * 0.07);
+      // jab / swing animation on top of the aim
+      const sk = Math.sin(p.swing * Math.PI);
+      if (p.weapon === 'fists') {
+        if (p.punchSide > 0) this.vm.position.z -= sk * 0.35;
+        if (this.vmL) this.vmL.position.z = -0.5 - (p.punchSide < 0 ? sk * 0.35 : 0);
+      } else if (WEAPONS[p.weapon].melee && sk > 0) {
+        this.vm.rotation.z += p.punchSide * sk * 1.3; this.vm.rotation.y += p.punchSide * sk * 0.5; this.vm.rotation.x -= sk * 0.4;
+      }
       this.viewmodel.position.y = bob * 0.5 + (p.slide > 0 ? 0.08 : 0);
     }
 
@@ -924,16 +991,17 @@ export class Game {
         const look = Math.atan2(p.x - o.position.x, p.z - o.position.z);
         o.rotation.y = Math.round(look * 8) / 8 + Math.PI;
         u.armR.rotation.x = Math.round((-Math.PI / 2 + 0.1 * Math.sin(stepT * 6) + (e.recoil || 0) * 0.5) * 10) / 10 + Math.PI / 2 - Math.PI / 2;
-        u.armR.rotation.x = (e.recoil || 0) * 0.6 + (e.type === 'sword' ? Math.sin(stepT * 10) * 0.8 : 0);
+        u.armR.rotation.x = (e.recoil || 0) * 0.6 + ((e.type === 'sword' || e.type === 'bat') ? Math.sin(stepT * 10) * 0.8 : 0);
         e.recoil = (e.recoil || 0) * Math.exp(-dt * 10);
         u.torso.position.y = 1.18 + Math.sin(stepT * 8 + i) * 0.03;
+        if (e.type === 'ninja') o.rotation.x = Math.sin(this.time * 2 + i) * 0.12;
         if (e.bobble) { u.head.rotation.z = Math.sin(this.time * 9 + i) * 0.28; u.head.rotation.x = Math.sin(this.time * 7 + i) * 0.15; }
         if (e.disco) u.head.rotation.y += realDt * 3;
         if (e.rushing) { u.legL.rotation.x = Math.sin(stepT * 18) * 0.7; u.legR.rotation.x = -u.legL.rotation.x; }
         // collision with player
         if (e.landed && Math.abs(dz) < 0.9 && Math.abs(o.position.x - p.x) < 1.0 && e.baseY < 1 && bodyMin < 1.2 && !p.wall) {
-          if (p.weapon === 'sword' || p.weapon === 'fists') this.killEnemy(e, 'body', { melee: true });
-          else { this.hurt(e.type === 'sword' ? 'slash' : 'bump'); e.alive = false; e.deadT = 0; e.vel = new THREE.Vector3(3, 3, 4); e.spin = new THREE.Vector3(3, 2, 1); }
+          if (WEAPONS[p.weapon].melee) this.killEnemy(e, 'body', { melee: true, bat: p.weapon === 'bat' });
+          else { this.hurt(e.type === 'sword' ? 'slash' : e.type === 'bat' ? 'bonk' : 'bump'); e.alive = false; e.deadT = 0; e.vel = new THREE.Vector3(3, 3, 4); e.spin = new THREE.Vector3(3, 2, 1); }
         }
         if (e.warn > 0) e.warn -= realDt;
         this.updateLaser(e, dz);
@@ -962,6 +1030,7 @@ export class Game {
       const b = this.bullets[i];
       b.prevZ = b.obj.position.z;
       b.obj.position.addScaledVector(b.vel, dt);
+      if (b.star) { b.star.rotation.z += dt * 30; b.star.rotation.x = 1.2; }
       b.t += dt;
       const bz = b.obj.position.z;
       if (!b.passed && bz >= p.z) { // bullets only travel toward/past you, so crossing your z = the moment of truth
@@ -969,7 +1038,7 @@ export class Game {
         const dx = Math.abs(b.obj.position.x - p.x), by = b.obj.position.y;
         const hit = dx < 0.62 && by > bodyMin && by < bodyMax;
         this.emit('bullet', { hit, dx });
-        if (hit && !p.dead) this.hurt('bullet');
+        if (hit && !p.dead) this.hurt(b.src || 'bullet');
         else if (dx < 1.9 && !p.dead) {
           this.audio.sfx('whiz');
           if (this.autoSlowCd <= 0 && !this.bulletTime) {
@@ -1037,7 +1106,12 @@ export class Game {
       pk.obj.rotation.y += realDt * 3; pk.obj.position.y = 1.2 + Math.sin(pk.t * 4) * 0.15;
       const dz = p.z - pk.obj.position.z;
       // auto-grab when running through it with an empty / no gun
-      if (Math.abs(dz) < 1.2 && Math.abs(pk.obj.position.x - p.x) < 1.3 && (p.ammo <= 0 || p.weapon === 'fists')) { this.grabPickup(pk); continue; }
+      const unarmed = p.ammo <= 0 || p.weapon === 'fists';
+      if (unarmed && dz > 0 && dz < 14) { // magnet: guns fly to your empty hands
+        pk.obj.position.x += (p.x - pk.obj.position.x) * (1 - Math.exp(-realDt * 6));
+        pk.obj.position.z += (p.z - pk.obj.position.z) * (1 - Math.exp(-realDt * 5));
+      }
+      if (Math.abs(dz) < 1.4 && Math.abs(pk.obj.position.x - p.x) < 1.5 && unarmed) { this.grabPickup(pk); continue; }
       if (dz < -5) { this.scene.remove(pk.obj); this.pickups.splice(i, 1); }
     }
 
@@ -1097,7 +1171,7 @@ export class Game {
       else if (this.hazards.some((h) => h.kind === 'cross' && h.armed && (p.z - h.obj.position.z) / this.speed < 1.5 && p.z - h.obj.position.z > 0)) al = ['rocketX', 'ROCKET!', touchUI ? 'SWIPE ↓ SLIDE  or  ↑ JUMP' : 'SLIDE ↓  or  JUMP ↑', '#ff7a00'];
       else if (this.hazards.some((h) => h.kind === 'dive' && h.armed && (p.z - h.obj.position.z) / this.speed < 1.6 && p.z - h.obj.position.z > 0)) al = ['rocketD', 'ROCKET!', 'CHANGE LANE', '#ff7a00'];
       else if (p.ammo <= 0 && !WEAPONS[p.weapon].melee) al = ['throw', 'THROW YOUR GUN!', touchUI ? 'HIT  THROW' : 'PRESS  F  /  RIGHT-CLICK', '#ff1f3d'];
-      else if (p.weapon === 'fists') al = ['grab', 'GRAB A GUN!', touchUI ? 'TAP A DROPPED GUN · PUNCH UP CLOSE' : 'CLICK A DROPPED GUN · PUNCH UP CLOSE', '#ffe600'];
+      else if (p.weapon === 'fists') al = ['grab', 'PUNCH A GOON!', touchUI ? 'TAP A GOON TO DISARM & STEAL' : 'CLICK A GOON TO DISARM & STEAL', '#ffe600'];
     }
     const key = al ? al[0] : '';
     if (key !== this.alertKey) { this.alertKey = key; this.ui.setAlert(al && al[1], al && al[2], al && al[3], al && al[4]); }

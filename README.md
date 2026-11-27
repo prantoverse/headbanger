@@ -6,7 +6,8 @@
 
 - Shoot on the beat, go for headshots. Enemies die in one hit. You have up to 3 armor pips (start with 2); **every 2 headshots restores one**.
 - Dodge lanes, jump, slide, and **wall run**. Bullets, barriers and rockets are all telegraphed to the music.
-- **No reloading.** When your gun runs dry, **throw it** at an enemy and steal their weapon.
+- **No reloading.** When your gun runs dry, **throw it** at an enemy and steal their weapon. Out of guns? **Punch** a goon to disarm them and take theirs; dropped guns fly to your empty hands.
+- Goons: pistol, machine pistol, shotgun, katana, **baseball bat** (steal it for HOME RUNs) and **ninjas** that rappel in upside down throwing shurikens (steal their stars).
 - Goons are Superhot-red and **shatter into shards** from wherever your bullet lands.
 - **3 headshots in a row** charges FOCUS. Press **Q**: time slows, the music drops to half-time with a heartbeat, and every click is a free kill.
 - **6 in a row** also loads a ricochet round that chains through the crowd.
