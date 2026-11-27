@@ -779,6 +779,7 @@ export class Game {
 
   spawnHazard(zAhead, forceKind) {
     const z = this.p.z - zAhead;
+    if (this.grap.blocks(z)) return null;
     const kinds = isGrid() ? ['low', 'high', 'lane', 'dive', 'cross'] : ['low', 'high', 'lane', 'dive', 'cross', 'duck'];
     const kind = forceKind || kinds[Math.floor(Math.random() * kinds.length)];
     const b = BIOMES[this.world.biomeAt(z)];
@@ -1046,6 +1047,8 @@ export class Game {
           if (WEAPONS[p.weapon].melee) this.killEnemy(e, 'body', { melee: true, bat: p.weapon === 'bat' });
           else { this.hurt(e.type === 'sword' ? 'slash' : e.type === 'bat' ? 'bonk' : 'bump'); e.alive = false; e.deadT = 0; e.vel = new THREE.Vector3(3, 3, 4); e.spin = new THREE.Vector3(3, 2, 1); }
         }
+        if (e.landed && e.baseY < 1 && !e.platform) this.goonVsBarriers(e, o);
+        if (!e.alive) continue;
         if (e.warn > 0) e.warn -= realDt;
         this.updateLaser(e, dz);
         if (dz < -6) { this.scene.remove(o); if (e.laser) this.scene.remove(e.laser); this.enemies.splice(i, 1); }
@@ -1151,7 +1154,7 @@ export class Game {
       if (!h.checked && dz <= 0) {
         h.checked = true;
         const lane = LANES.reduce((a, b, idx) => (Math.abs(b - p.x) < Math.abs(LANES[a] - p.x) ? idx : a), 0);
-        const inLane = h.lanes.includes(lane) && !p.wall;
+        const inLane = h.lanes.includes(lane) && !p.wall && !this.grap.airborne();
         const overlap = bodyMax > h.yMin && bodyMin < h.yMax;
         this.emit('hazard', { kind: h.kind, ok: !(inLane && overlap) });
         if (inLane && overlap) this.hurt(h.kind === 'dive' || h.kind === 'cross' ? 'rocket' : h.kind === 'duck' ? 'duck' : 'barrier');
@@ -1250,6 +1253,30 @@ export class Game {
     u.shift.value += ((isGrid() ? 0 : 1.5 + this.world.beatPulse * 2.5) - u.shift.value) * (1 - Math.exp(-realDt * 12));
     u.speed.value = Math.min(1, Math.max(0, (this.speed - 15) / 8) + (this.timeScale < 0.6 ? 0.7 : 0) + (p.wall ? 0.6 : 0));
     this.hurtFx = Math.max(0, this.hurtFx - realDt * 2); u.hurt.value = Math.max(this.hurtFx, p.armor === 0 ? 0.35 + Math.sin(this.time * 8) * 0.1 : 0);
+  }
+
+  // charging goons smash into barriers; standing goons never stand inside a crate
+  goonVsBarriers(e, o) {
+    for (const h of this.hazards) {
+      if (!h.lanes || h.popped || h.kind === 'dive' || h.kind === 'cross' || h.kind === 'canister') continue;
+      const hz = h.obj.position.z;
+      if (Math.abs(o.position.z - hz) > 0.8) continue;
+      const el = LANES.reduce((a, b, idx) => (Math.abs(b - o.position.x) < Math.abs(LANES[a] - o.position.x) ? idx : a), 0);
+      if (!h.lanes.includes(el) || Math.abs(o.position.x - LANES[el]) > 1.3) continue;
+      if (e.rushing) {
+        const label = h.kind === 'high' ? 'CLOTHESLINED!' : h.kind === 'low' ? 'TRIPPED!' : h.kind === 'duck' ? 'QUACKED!' : 'FACEPLANT!';
+        o.position.z = hz - 0.5;
+        this.killEnemy(e, 'body', { melee: true });
+        this.audio.sfx('bonk'); this.addScore(100);
+        const v = o.position.clone(); v.y += 1.2; v.project(this.camera);
+        this.ui.pop(label, (v.x + 1) / 2 * innerWidth, (1 - v.y) / 2 * innerHeight, '#ffe600', 34);
+        return;
+      }
+      if (h.kind === 'lane' || h.kind === 'duck') { // step out of the crate into the open lane
+        const open = [0, 1, 2].find((l) => !h.lanes.includes(l));
+        if (open !== undefined) o.position.x += (LANES[open] - o.position.x) * 0.25;
+      }
+    }
   }
 
   popDuck(h, point) {

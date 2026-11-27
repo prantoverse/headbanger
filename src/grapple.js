@@ -51,12 +51,14 @@ export class Grapple {
     const z0 = w.nextZ - CHUNK;                  // first chunk not built yet
     const s = { z0, zSwing: z0 - SWING, zEnd: z0 - SWING - WALLRUN, state: 'approach', done: false, spawned: false };
     w.gaps.push({ a: z0, wallFrom: s.zSwing, b: s.zEnd });
+    for (let i = g.hazards.length - 1; i >= 0; i--) { const hz = g.hazards[i].obj.position.z; if (hz <= z0 + 6 && hz > s.zEnd - 8) { g.scene.remove(g.hazards[i].obj); g.hazards.splice(i, 1); } }
     this.build(s);
     this.sets.push(s);
   }
 
   // is z over open lava (no floor)?
   overPit(z) { return this.sets.some((s) => z <= s.z0 && z > s.zEnd); }
+  airborne() { const s = this.cur; return !!s && (s.state === 'swing' || s.state === 'wall'); }
   blocks(z) { return this.sets.some((s) => !s.done && z <= s.z0 + 4 && z > s.zEnd - 6); }
 
   build(s) {
@@ -83,7 +85,7 @@ export class Grapple {
       e.position.set((Math.random() - 0.5) * 16, -5 + Math.random() * 8, s.z0 - Math.random() * len); grp.add(e); s.embers.push(e);
     }
     // the hook anchor, mid-swing, hanging from a cable into the sky
-    const anchor = new THREE.Group(); anchor.position.set(0, 7.5, s.z0 - SWING * 0.55);
+    const anchor = new THREE.Group(); anchor.position.set(0, 10.5, s.z0 - SWING * 0.55);
     const ringCol = grid ? 0x6ab4ff : 0x00e5ff;
     const ring = new THREE.Mesh(new THREE.TorusGeometry(0.9, 0.14, 8, 32), flat(ringCol));
     const ring2 = new THREE.Mesh(new THREE.TorusGeometry(1.35, 0.05, 6, 40), flat(grid ? 0xffffff : 0xffe600));
@@ -174,10 +176,10 @@ export class Grapple {
     if (s.state === 'swing') {
       const k = Math.min(1, (s.zs - p.z) / (s.zs - s.zSwing));
       const tx = s.side * (WALL_X - 0.75);
-      p.y = THREE.MathUtils.lerp(s.y0, 1.3, k) - 2.6 * Math.sin(Math.PI * k);
+      p.y = THREE.MathUtils.lerp(s.y0, 1.3, k) + 3.8 * Math.sin(Math.PI * Math.min(1, k * 1.15)); // yanked UP, then drop onto the wall
       p.x += ((k < 0.55 ? THREE.MathUtils.lerp(s.x0, 0, k / 0.55) : THREE.MathUtils.lerp(0, tx, (k - 0.55) / 0.45)) - p.x) * (1 - Math.exp(-realDt * 10));
       p.roll += (-Math.sin(Math.PI * k * 2) * 0.22 - s.side * 0.12 * k - p.roll) * (1 - Math.exp(-realDt * 6));
-      p.pitch = Math.sin(Math.PI * k) * 0.14;
+      p.pitch = Math.cos(Math.PI * k) * 0.14; // look up on the yank, down onto the wall
       this.fov = Math.max(this.fov, Math.sin(Math.PI * k) * 14);
       this.drawRope(s);
       if (k >= 1) {
