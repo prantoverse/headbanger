@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { BEAT, LOOP_LEN } from './audio.js';
 import { LANES, WALL_X, toon, flat, BIOMES } from './world.js';
 import { Goofy } from './goofy.js';
+import { isGrid } from './style.js';
 
 const BOX = new THREE.BoxGeometry(1, 1, 1);
 const CYL = new THREE.CylinderGeometry(1, 1, 1, 10);
@@ -50,7 +51,31 @@ function buildShuriken(size = 0.3) {
   return g;
 }
 
-function buildWeaponModel(type, scale = 1) {
+// display names per style
+const GRID_NAMES = { sword: 'PHOTON BLADE', pistol: 'BLASTER', smg: 'PULSE SMG', shotgun: 'SCATTER CANNON', bat: 'ARC BAT', stars: 'DATA STARS', fists: 'FISTS' };
+export const wname = (t) => (isGrid() ? GRID_NAMES[t] : WEAPONS[t].name);
+
+function buildGridWeapon(type, owner) {
+  const g = new THREE.Group();
+  const glow = flat(owner === 'player' ? 0x00e5ff : 0xff1f3d), blk = toon(0x101018), steel = toon(0x8a90a8);
+  if (type === 'sword') { // photon blade: hilt + glowing core with a soft outer sheath
+    g.add(box(steel, 0.05, 0.05, 0.3, 0, 0, 0.05), box(blk, 0.065, 0.065, 0.06, 0, 0, -0.1), box(glow, 0.07, 0.02, 0.02, 0, 0.035, 0.05));
+    g.add(box(flat(0xffffff), 0.028, 0.028, 1.15, 0, 0, -0.72));
+    const sheath = new THREE.Mesh(BOX, new THREE.MeshBasicMaterial({ color: owner === 'player' ? 0x00e5ff : 0xff1f3d, transparent: true, opacity: 0.55, depthWrite: false }));
+    sheath.scale.set(0.07, 0.07, 1.2); sheath.position.z = -0.72; g.add(sheath);
+    return g;
+  }
+  if (type === 'bat') { g.add(box(blk, 0.09, 0.09, 1.0, 0, 0, -0.5), box(glow, 0.1, 0.1, 0.03, 0, 0, -0.85), box(glow, 0.1, 0.1, 0.03, 0, 0, -0.55)); return g; }
+  if (type === 'stars') { g.add(buildShuriken(0.16)); return g; }
+  if (type === 'fists') { g.add(box(toon(0xd8dce8), 0.16, 0.12, 0.16, 0, 0, -0.05), box(glow, 0.17, 0.03, 0.17, 0, 0.04, -0.05)); return g; }
+  const len = type === 'shotgun' ? 0.7 : type === 'smg' ? 0.42 : 0.34;
+  g.add(box(blk, 0.1, 0.13, len, 0, 0.03, -len / 2 + 0.05), box(blk, 0.08, 0.2, 0.1, 0, -0.1, 0.02));
+  g.add(box(glow, 0.105, 0.02, len * 0.9, 0, 0.065, -len / 2 + 0.05), box(glow, 0.06, 0.06, 0.04, 0, 0.03, -len + 0.03));
+  return g;
+}
+
+function buildWeaponModel(type, scale = 1, owner = 'enemy') {
+  if (isGrid()) { const gw = buildGridWeapon(type, owner); gw.scale.setScalar(scale); return gw; }
   const g = new THREE.Group();
   const dark = toon(0x4a4a66), metal = toon(0xb8c2da), acc = flat(0xffe600);
   if (type === 'pistol') { g.add(box(dark, 0.09, 0.12, 0.34, 0, 0.03, -0.1), box(dark, 0.08, 0.2, 0.1, 0, -0.1, 0.02), box(acc, 0.1, 0.02, 0.05, 0, 0.1, -0.24)); }
@@ -97,7 +122,8 @@ const gm = (geo, mat, x, y, z, rx = 0, sx = 1, sy = 1, sz = 1) => { const o = ne
 
 function buildEnemy(type) {
   const d = ENEMY[type];
-  const body = crystal(d.jacket, 0.55), limb = crystal(d.pants, 0.5);
+  const grid = isGrid();
+  const body = grid ? crystal(0xf0f2ff, 0.32) : crystal(d.jacket, 0.55), limb = grid ? crystal(0xb8bccc, 0.22) : crystal(d.pants, 0.5);
   const g = new THREE.Group();
   // torso group keeps the old pivot (y 1.18) so the bob animation still works
   const torso = new THREE.Group(); torso.position.y = 1.18; g.add(torso);
@@ -131,6 +157,12 @@ function buildEnemy(type) {
     for (const s2 of [-1, 1]) { const tail = new THREE.Mesh(BOX, blk); tail.scale.set(0.05, 0.3, 0.04); tail.position.set(s2 * 0.06, -0.1, 0.24); tail.rotation.x = 0.5; head.add(tail); }
     const scarf = new THREE.Mesh(BOX, blk); scarf.scale.set(0.36, 0.1, 0.3); scarf.position.y = 0.55; torso.add(scarf);
     const rope = new THREE.Mesh(CYL, toon(0x3a2a1a)); rope.scale.set(0.03, 40, 0.03); rope.position.y = -20; g.add(rope); // up into the sky (flipped)
+  }
+  if (grid) { // red visor slit + glowing red core + red joint rings: max contrast on the dark grid
+    const red = flat(0xff1f3d);
+    const visor = new THREE.Mesh(BOX, red); visor.scale.set(0.34, 0.06, 0.05); visor.position.set(0, 0.03, -0.17); head.add(visor);
+    const core = new THREE.Mesh(BOX, red); core.scale.set(0.14, 0.14, 0.05); core.position.set(0, 0.2, -0.2); torso.add(core);
+    for (const L of [legL, legR]) { const ring = new THREE.Mesh(BOX, red); ring.scale.set(0.2, 0.04, 0.2); ring.position.y = -0.45; L.add(ring); }
   }
   g.userData = { torso, head, legL, legR, armR, armL, gun, hHead, hBody };
   g.scale.setScalar(type === 'shotgun' ? 1.28 : 1.15);
@@ -184,7 +216,7 @@ export class Game {
     this.ricochet = false;
     this.last16 = -1; this.lastBar = -1; this.barCount = 0;
     this.biomeIndex = 0; this.lap = 0; this.nextPortalBar = 36;
-    this.setWeapon('pistol', WEAPONS.pistol.ammo);
+    if (isGrid() && this.mode === 'run') this.setWeapon('sword', Infinity); else this.setWeapon('pistol', WEAPONS.pistol.ammo);
     this.ui.setArmor(2); this.ui.setScore(0, 1); this.ui.setFocus(0, false);
   }
 
@@ -203,16 +235,16 @@ export class Game {
       return a;
     };
     const m = new THREE.Group();
-    const gun = buildWeaponModel(type, 0.52);
+    const gun = buildWeaponModel(type, 0.52, 'player');
     m.add(gun, arm());
     m.position.set(0.22, -0.21, -0.52);
     m.rotation.set(0.04, 0.2, -0.05);
     if (type === 'sword') { gun.rotation.set(1.1, 0, 0); gun.position.set(0, 0.02, -0.02); m.position.set(0.24, -0.24, -0.5); }
     if (type === 'bat') { gun.rotation.set(1.25, 0, 0.2); gun.position.set(0, 0.02, -0.02); m.position.set(0.26, -0.26, -0.5); }
     this.vmL = null;
-    if (type === 'fists') { const l = arm(); l.add(buildWeaponModel('fists', 0.55)); l.position.set(-0.2, -0.2, -0.5); l.rotation.y = -0.16; this.viewmodel.add(l); this.vmL = l; m.add(buildWeaponModel('fists', 0.55)); }
+    if (type === 'fists') { const l = arm(); l.add(buildWeaponModel('fists', 0.55, 'player')); l.position.set(-0.2, -0.2, -0.5); l.rotation.y = -0.16; this.viewmodel.add(l); this.vmL = l; m.add(buildWeaponModel('fists', 0.55, 'player')); }
     this.viewmodel.add(m); this.vm = m;
-    this.ui.setWeapon(WEAPONS[type].name, ammo, WEAPONS[type].ammo);
+    this.ui.setWeapon(wname(type), ammo, WEAPONS[type].ammo);
   }
 
   // ------------------------------------------------------------ input actions
@@ -310,7 +342,7 @@ export class Game {
           this.killEnemy(e, t.part, { melee: true, punch: true, point: t.point });
           this.setWeapon(stolen, WEAPONS[stolen].ammo);
           const s2 = this.toScreen(t.point);
-          this.ui.pop('DISARMED! +' + WEAPONS[stolen].name, s2.x, s2.y + 40, '#00e5ff', 32);
+          this.ui.pop('DISARMED! +' + wname(stolen), s2.x, s2.y + 40, '#00e5ff', 32);
         } else this.killEnemy(e, t.part, { melee: true, bat: p.weapon === 'bat', point: t.point });
       } else { this.audio.sfx('throw'); this.vmKick(0.3); }
       return;
@@ -523,7 +555,7 @@ export class Game {
       this.ui.setHealProgress(this.p.heals);
     }
     if (e.disco) this.goofy.startDisco();
-    if (head && this.mode === 'run' && Math.random() < 0.14) this.goofy.spawnBanana(e.obj.position.x, e.obj.position.z);
+    if (head && this.mode === 'run' && !isGrid() && Math.random() < 0.14) this.goofy.spawnBanana(e.obj.position.x, e.obj.position.z);
     if (head) this.goofy.headCount++;
     if (head && this.goofy.headCount % 10 === 0) {
       // every 10th headshot: a confetti cannon instead of shards
@@ -673,7 +705,7 @@ export class Game {
     if (type === 'ninja') obj.rotation.z = Math.PI; // head down, legs up
     this.scene.add(obj);
     const en = { obj, type, alive: true, landed: false, landBeat, baseY: elevated, fireOffset: Math.floor(Math.random() * 2), rushing: false, t: 0, burst: 0, passive };
-    if (this.mode === 'run') {
+    if (this.mode === 'run' && !isGrid()) {
       const r = Math.random(), u = obj.userData;
       if (this.heat >= 2 && r < 0.07) { // DISCO goon: mirror-ball head
         en.disco = true;
@@ -726,7 +758,7 @@ export class Game {
     }
     // hazards
     if (bar > 2 && bar % 2 === 1 && Math.random() < 0.3 + diff * 0.55) this.spawnHazard(40 + this.speed);
-    if (bar > 1 && Math.random() < 0.12) this.goofy.spawnFlock(30 + this.speed * 0.5);
+    if (bar > 1 && !isGrid() && Math.random() < 0.12) this.goofy.spawnFlock(30 + this.speed * 0.5);
     // power-ups
     // biome portal
     if (bar === this.nextPortalBar) {
@@ -738,7 +770,7 @@ export class Game {
 
   spawnHazard(zAhead, forceKind) {
     const z = this.p.z - zAhead;
-    const kinds = ['low', 'high', 'lane', 'dive', 'cross', 'duck'];
+    const kinds = isGrid() ? ['low', 'high', 'lane', 'dive', 'cross'] : ['low', 'high', 'lane', 'dive', 'cross', 'duck'];
     const kind = forceKind || kinds[Math.floor(Math.random() * kinds.length)];
     const b = BIOMES[this.world.biomeAt(z)];
     const g = new THREE.Group(); g.position.z = z;
@@ -1148,7 +1180,7 @@ export class Game {
           this.killEnemy(th.enemy, th.part, { thrown: true });
           this.setWeapon(etype, WEAPONS[etype].ammo);
           const s = this.toScreen(tgt);
-          this.ui.pop('STOLE ' + WEAPONS[etype].name + '!', s.x, s.y + 40, '#00e5ff', 30);
+          this.ui.pop('STOLE ' + wname(etype) + '!', s.x, s.y + 40, '#00e5ff', 30);
         }
       }
     }
@@ -1204,7 +1236,7 @@ export class Game {
     u.time.value += realDt;
     u.slow.value += ((this.timeScale < 0.6 ? 1 : 0) - u.slow.value) * (1 - Math.exp(-realDt * 8));
     this.impact = Math.max(0, this.impact - realDt * 9); u.impact.value = this.impact > 0.5 ? 1 : 0;
-    u.shift.value += (1.5 + this.world.beatPulse * 2.5 - u.shift.value) * (1 - Math.exp(-realDt * 12));
+    u.shift.value += ((isGrid() ? 0 : 1.5 + this.world.beatPulse * 2.5) - u.shift.value) * (1 - Math.exp(-realDt * 12));
     u.speed.value = Math.min(1, Math.max(0, (this.speed - 15) / 8) + (this.timeScale < 0.6 ? 0.7 : 0) + (p.wall ? 0.6 : 0));
     this.hurtFx = Math.max(0, this.hurtFx - realDt * 2); u.hurt.value = Math.max(this.hurtFx, p.armor === 0 ? 0.35 + Math.sin(this.time * 8) * 0.1 : 0);
   }

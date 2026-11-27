@@ -12,7 +12,7 @@ precision highp float;
 uniform sampler2D tColor;
 uniform sampler2D tDepth;
 uniform vec2 res;
-uniform float time, slow, impact, shift, speed, near, far, dotScale, hurt, paint, trip, beat, dim;
+uniform float time, slow, impact, shift, speed, near, far, dotScale, hurt, paint, trip, beat, dim, glow;
 uniform vec3 inkCol, paperCol, shadowTint;
 varying vec2 vUv;
 
@@ -73,8 +73,21 @@ void main(){
   // GROOVE: rainbow hue roll sweeping across the screen
   if (trip > 0.01) col = mix(col, hueShift(col, time * 1.6 + (vUv.x + vUv.y) * 3.0), trip * 0.7);
 
+  // GRID: bloom-ish glow from bright pixels
+  if (glow > 0.01) {
+    vec3 gl = vec3(0.0);
+    for (int i = 0; i < 8; i++) {
+      float a = float(i) * 0.7854;
+      for (int r = 1; r <= 2; r++) {
+        vec3 s = srgb(texture2D(tColor, uv + vec2(cos(a), sin(a)) * px * float(r) * 5.0).rgb);
+        gl += max(s - 0.62, 0.0);
+      }
+    }
+    col += gl / 16.0 * 1.1 * glow;
+  }
+
   // ink
-  col = mix(col, inkCol, edge);
+  col = mix(col, inkCol, edge * (1.0 - glow * 0.7));
 
   // --- speed lines ---
   vec2 c = uv - 0.5; c.x *= res.x / res.y;
@@ -129,7 +142,7 @@ export class ComicPost {
       uniforms: {
         tColor: { value: this.rt.texture }, tDepth: { value: this.rt.depthTexture },
         res: { value: size.clone() }, time: { value: 0 }, slow: { value: 0 }, impact: { value: 0 },
-        shift: { value: 1.5 }, speed: { value: 0 }, hurt: { value: 0 }, paint: { value: 1 }, trip: { value: 0 }, beat: { value: 0 }, dim: { value: 0 },
+        shift: { value: 1.5 }, speed: { value: 0 }, hurt: { value: 0 }, paint: { value: 1 }, trip: { value: 0 }, beat: { value: 0 }, dim: { value: 0 }, glow: { value: 0 },
         near: { value: camera.near }, far: { value: camera.far },
         dotScale: { value: 6.5 * Math.max(1, renderer.getPixelRatio()) },
         inkCol: { value: new THREE.Color(0x0b0410) },
@@ -142,6 +155,12 @@ export class ComicPost {
     this.qScene = new THREE.Scene(); this.qScene.add(this.quad);
     this.qCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
     this.u = this.mat.uniforms;
+  }
+  setStyle(mode) {
+    const g = mode === 'grid';
+    this.u.glow.value = g ? 1 : 0;
+    this.u.inkCol.value.set(g ? 0x070818 : 0x0b0410);
+    this.gridMode = g; this.u.shift.value = g ? 0 : 1.5;
   }
   setSize() {
     const size = this.renderer.getDrawingBufferSize(new THREE.Vector2());

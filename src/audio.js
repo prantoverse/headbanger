@@ -170,11 +170,140 @@ export async function renderSong(song, variant) {
   return ctx.startRendering();
 }
 
-export { BIOME_SONGS };
-// start rendering riffs as soon as the page loads so PLAY is instant
-const prerender = [];
-let chain = Promise.resolve();
-for (let i = 0; i < BIOME_SONGS.length; i++) { chain = chain.then(() => renderSong(BIOME_SONGS[i], i)); prerender[i] = chain; }
+// ---------------------------------------------------------------- GRID MODE: filtered French-house
+// four-on-the-floor, off-beat open hats, filtered disco chord stabs with a pumping filter,
+// slap-octave funk bass, a robot "talkbox" hook, arps; 16 bars: filtered intro -> groove ->
+// breakdown -> full drop.
+const GRID_SONGS = [
+  { root: 55.0,  chords: [[0, 'm'], [-4, 'M'], [-2, 'M'], [-7, 'm']], hook: [12, 12, 10, 7, 10, 12, 15, 12] }, // A minor
+  { root: 49.0,  chords: [[0, 'm'], [3, 'M'], [-2, 'M'], [5, 'm']],  hook: [7, 10, 12, 10, 7, 5, 7, 3] },     // G minor
+  { root: 58.27, chords: [[0, 'm'], [-4, 'M'], [-5, 'M'], [-2, 'M']], hook: [15, 12, 10, 12, 15, 17, 15, 12] }, // Bb minor
+  { root: 46.25, chords: [[0, 'm'], [5, 'm'], [-4, 'M'], [-5, 'M']], hook: [10, 12, 15, 12, 10, 7, 10, 12] },  // F# minor
+];
+
+export async function renderGridSong(song, variant) {
+  const sr = 32000;
+  const ctx = new OfflineAudioContext(2, Math.ceil(LOOP_LEN * sr), sr);
+  const noise = noiseBuffer(ctx, 1);
+  const master = ctx.createGain(); master.gain.value = 0.5;
+  const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -14; comp.ratio.value = 4; comp.attack.value = 0.004; comp.release.value = 0.12;
+  const post = ctx.createGain(); post.gain.value = 0.62;
+  master.connect(comp).connect(post).connect(ctx.destination);
+  const ir = ctx.createBuffer(2, sr * 1.8, sr);
+  for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 3); }
+  const verb = ctx.createConvolver(); verb.buffer = ir;
+  const verbIn = ctx.createGain(); verbIn.gain.value = 0.22; verbIn.connect(verb).connect(master);
+
+  const s16 = BEAT / 4, bar = 4 * BEAT;
+  const hz = (semis, oct = 0) => song.root * Math.pow(2, semis / 12 + oct);
+  const chordAt = (b) => song.chords[Math.floor(b / 2) % song.chords.length];
+  const tones = ([r, q]) => [r, r + (q === 'm' ? 3 : 4), r + 7, r + 10, r + 12, r + 14]; // 7ths & 9ths: disco colour
+
+  // the "French filter": music bus lowpass that opens over the intro, dips in the breakdown, pumps per beat
+  const musicIn = ctx.createGain(), mlp = ctx.createBiquadFilter(); mlp.type = 'lowpass'; mlp.Q.value = 3;
+  const pumpG = ctx.createGain(); musicIn.connect(mlp).connect(pumpG); pumpG.connect(master); pumpG.connect(verbIn);
+  mlp.frequency.setValueAtTime(350, 0); mlp.frequency.exponentialRampToValueAtTime(9000, 4 * bar);
+  mlp.frequency.setValueAtTime(9000, 8 * bar); mlp.frequency.exponentialRampToValueAtTime(600, 9 * bar); mlp.frequency.exponentialRampToValueAtTime(12000, 12 * bar);
+  for (let i = 0; i < BARS * 4; i++) { const t = i * BEAT; pumpG.gain.setValueAtTime(0.3, t); pumpG.gain.linearRampToValueAtTime(1, t + BEAT * 0.7); }
+  const bassBus = ctx.createGain(); bassBus.connect(master);
+  for (let i = 0; i < BARS * 4; i++) { const t = i * BEAT; bassBus.gain.setValueAtTime(0.45, t); bassBus.gain.linearRampToValueAtTime(1, t + BEAT * 0.5); }
+
+  const kick = (t) => {
+    const o = ctx.createOscillator(); o.frequency.setValueAtTime(140, t); o.frequency.exponentialRampToValueAtTime(48, t + 0.06);
+    const ws = ctx.createWaveShaper(); ws.curve = distCurve(3);
+    const g = ctx.createGain(); g.gain.setValueAtTime(1.05, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+    o.connect(ws).connect(g).connect(master); o.start(t); o.stop(t + 0.32);
+  };
+  const clap = (t, v = 1) => {
+    for (let k = 0; k < 3; k++) {
+      const n = ctx.createBufferSource(); n.buffer = noise; const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 1400; f.Q.value = 1;
+      const g = ctx.createGain(); const tt = t + k * 0.012; g.gain.setValueAtTime(0.7 * v, tt); g.gain.exponentialRampToValueAtTime(0.001, tt + (k === 2 ? 0.2 : 0.03));
+      n.connect(f).connect(g); g.connect(master); if (k === 2) g.connect(verbIn); n.start(tt, Math.random() * 0.5); n.stop(tt + 0.22);
+    }
+  };
+  const hat = (t, open, v = 1) => {
+    const n = ctx.createBufferSource(); n.buffer = noise; const f = ctx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = open ? 7000 : 9000;
+    const g = ctx.createGain(); g.gain.setValueAtTime((open ? 0.2 : 0.09) * v, t); g.gain.exponentialRampToValueAtTime(0.001, t + (open ? 0.2 : 0.03));
+    const p = ctx.createStereoPanner(); p.pan.value = open ? -0.2 : 0.3;
+    n.connect(f).connect(g).connect(p).connect(master); n.start(t, Math.random() * 0.5); n.stop(t + 0.22);
+  };
+  // funky slap-octave bass (square + saw through a plucky filter)
+  const bass = (t, semis, len) => {
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.Q.value = 7; lp.frequency.setValueAtTime(2200, t); lp.frequency.exponentialRampToValueAtTime(320, t + 0.12);
+    const g = ctx.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.42, t + 0.004); g.gain.exponentialRampToValueAtTime(0.03, t + len);
+    lp.connect(g).connect(bassBus);
+    for (const [ty, det] of [['square', 0], ['sawtooth', 7]]) { const o = ctx.createOscillator(); o.type = ty; o.frequency.value = hz(semis, 1); o.detune.value = det; o.connect(lp); o.start(t); o.stop(t + len + 0.01); }
+    const sub = ctx.createOscillator(); sub.frequency.value = hz(semis, 0); const sg = ctx.createGain(); sg.gain.setValueAtTime(0.35, t); sg.gain.exponentialRampToValueAtTime(0.01, t + len); sub.connect(sg).connect(bassBus); sub.start(t); sub.stop(t + len + 0.01);
+  };
+  // disco chord stab (sampled-disco feel: detuned saws + squares)
+  const stab = (t, chord, len) => {
+    const g = ctx.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.06, t + 0.008); g.gain.setValueAtTime(0.055, t + len * 0.7); g.gain.linearRampToValueAtTime(0, t + len);
+    g.connect(musicIn);
+    for (const st of tones(chord).slice(0, 5)) for (const [ty, det] of [['sawtooth', -9], ['sawtooth', 9], ['square', 0]]) {
+      const o = ctx.createOscillator(); o.type = ty; o.frequency.value = hz(st, 3); o.detune.value = det;
+      const p = ctx.createStereoPanner(); p.pan.value = det / 12; o.connect(p).connect(g); o.start(t); o.stop(t + len + 0.02);
+    }
+  };
+  const arp = (t, semis) => {
+    const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = hz(semis, 4);
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.setValueAtTime(4000, t); lp.frequency.exponentialRampToValueAtTime(600, t + 0.1);
+    const g = ctx.createGain(); g.gain.setValueAtTime(0.03, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+    o.connect(lp).connect(g).connect(musicIn); o.start(t); o.stop(t + 0.13);
+  };
+  // robot "talkbox": square through a formant filter that sweeps "ow-ah" per note
+  const talk = (t, semis, len, prev) => {
+    const f = hz(semis, 3);
+    const o = ctx.createOscillator(); o.type = 'square';
+    if (prev != null) { o.frequency.setValueAtTime(hz(prev, 3), t); o.frequency.exponentialRampToValueAtTime(f, t + 0.05); } else o.frequency.value = f;
+    const f1 = ctx.createBiquadFilter(); f1.type = 'bandpass'; f1.Q.value = 9; f1.frequency.setValueAtTime(400, t); f1.frequency.exponentialRampToValueAtTime(900, t + len * 0.5);
+    const f2 = ctx.createBiquadFilter(); f2.type = 'bandpass'; f2.Q.value = 11; f2.frequency.setValueAtTime(900, t); f2.frequency.exponentialRampToValueAtTime(1500, t + len * 0.5);
+    const mix = ctx.createGain(); mix.gain.value = 2.6;
+    const g = ctx.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.32, t + 0.02); g.gain.setValueAtTime(0.3, t + len * 0.8); g.gain.linearRampToValueAtTime(0, t + len);
+    o.connect(f1).connect(mix); o.connect(f2).connect(mix); mix.connect(g); g.connect(master); g.connect(verbIn);
+    o.start(t); o.stop(t + len + 0.02);
+  };
+
+  let prevTalk = null;
+  for (let b = 0; b < BARS; b++) {
+    const bt = b * bar, chord = chordAt(b), ct = tones(chord);
+    const intro = b < 4, groove = b >= 4 && b < 8, breakdown = b === 8 || b === 9, drop = b >= 10;
+    if (!breakdown) for (let k = 0; k < 4; k++) kick(bt + k * BEAT);
+    if (!intro || b >= 2) { clap(bt + BEAT); clap(bt + 3 * BEAT); }
+    for (let k = 0; k < 4; k++) { hat(bt + k * BEAT + BEAT / 2, true, breakdown ? 0.5 : 1); if (!intro) { hat(bt + k * BEAT + BEAT / 4, false); hat(bt + k * BEAT + BEAT * 0.75, false); } }
+    if (b === 9) for (let k = 0; k < 8; k++) clap(bt + 2 * BEAT + k * s16, 0.4 + k * 0.08); // clap roll into the drop
+    // syncopated disco stabs
+    for (const st of [0, 3, 6, 10, 12, 14]) stab(bt + st * s16, chord, s16 * (st === 6 || st === 14 ? 2 : 1.6));
+    // slap octave bass
+    if (!breakdown) {
+      const pat = [[0, 0], [2, 12], [3, 0], [6, 12], [8, 0], [10, 12], [11, 7], [14, 12]];
+      for (const [st, o] of pat) bass(bt + st * s16, chord[0] + o, s16 * 1.6);
+    }
+    if (groove || drop) { const ap = [0, 2, 4, 2, 1, 3, 4, 3]; for (let st = 0; st < 16; st++) arp(bt + st * s16, ct[ap[st % 8]]); }
+    // talkbox hook: answers every bar in the groove, sings over the drop
+    if (groove || drop || breakdown) {
+      const h = song.hook, i0 = (b * 2) % h.length;
+      const rhythm = drop ? [[0, 3], [3, 3], [6, 2], [8, 6], [14, 2]] : [[0, 3], [6, 2], [8, 4]];
+      rhythm.forEach(([pos, len], k) => { const n = h[(i0 + k) % h.length]; talk(bt + pos * s16, n, len * s16 * 0.95, prevTalk); prevTalk = n; });
+    }
+  }
+  const out = await ctx.startRendering();
+  let peak = 0;
+  for (let ch = 0; ch < 2; ch++) { const d = out.getChannelData(ch); for (let i = 0; i < d.length; i++) peak = Math.max(peak, Math.abs(d[i])); }
+  const k = peak > 0 ? 0.85 / peak : 1;
+  for (let ch = 0; ch < 2; ch++) { const d = out.getChannelData(ch); for (let i = 0; i < d.length; i++) d[i] *= k; }
+  return out;
+}
+
+export { BIOME_SONGS, GRID_SONGS };
+// style-aware prerender: songs for a style render once, in order, starting as soon as asked
+const cache = {};
+export function prerender(mode) {
+  if (cache[mode]) return cache[mode];
+  const list = mode === 'grid' ? GRID_SONGS : BIOME_SONGS, render = mode === 'grid' ? renderGridSong : renderSong;
+  let chain = Promise.resolve();
+  cache[mode] = list.map((song, i) => (chain = chain.then(() => render(song, i))));
+  return cache[mode];
+}
 
 export class AudioEngine {
   constructor() {
@@ -194,8 +323,15 @@ export class AudioEngine {
     this.comp.connect(c.destination);
     this.noise = noiseBuffer(c, 1.5);
     this.ws = distCurve(60);
-    this.buffers[0] = await prerender[0];
-    prerender.forEach((p, i) => p.then((b) => (this.buffers[i] = b)));
+
+  }
+  async loadStyle(mode) {
+    this.mode = mode;
+    const ps = prerender(mode);
+    const first = await ps[0];
+    if (this.mode !== mode) return;
+    this.buffers = [first];
+    ps.forEach((p, i) => p.then((b) => { if (this.mode === mode) this.buffers[i] = b; }));
   }
   resume() { if (this.ctx && this.ctx.state !== 'running') this.ctx.resume(); }
 

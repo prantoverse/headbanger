@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { AudioEngine } from './audio.js';
+import { AudioEngine, prerender } from './audio.js';
+import { STYLE } from './style.js';
 import { World } from './world.js';
 import { Game, WEAPONS } from './game.js';
 import { ComicPost } from './post.js';
@@ -68,6 +69,17 @@ function refreshMenu() {
 }
 refreshMenu();
 
+// ---------------------------------------------------------------- SELECT YOUR STYLE
+function applyStyle(mode) {
+  STYLE.mode = mode; store.set('headbanger.style', mode);
+  world.setStyle(mode); setpieces.reset(); post.setStyle(mode);
+  document.body.classList.toggle('grid', mode === 'grid');
+  document.querySelectorAll('.style-card').forEach((c) => c.classList.toggle('sel', c.dataset.style === mode));
+  prerender(mode); // start building that style's music right away
+}
+document.querySelectorAll('.style-card').forEach((c) => c.addEventListener('click', () => applyStyle(c.dataset.style)));
+applyStyle(store.get('headbanger.style') === 'grid' ? 'grid' : 'comic');
+
 const tutorial = new Tutorial(game, ui, () => startGame('run'));
 
 let audioReady = null;
@@ -77,8 +89,8 @@ async function startGame(mode) {
   if (!audioReady) audioReady = audio.init();
   audio.resume && audio.ctx && audio.resume();
   const playBtn = document.getElementById('btn-play'), label = playBtn.textContent;
-  playBtn.textContent = 'TUNING GUITARS…';
-  await audioReady; audio.resume(); playBtn.textContent = label;
+  playBtn.textContent = STYLE.mode === 'grid' ? 'BOOTING GRID…' : 'TUNING GUITARS…';
+  await audioReady; await audio.loadStyle(STYLE.mode); audio.resume(); playBtn.textContent = label;
   ui.show('menu', false); ui.show('over', false); ui.show('hud', true);
   world.reset(); setpieces.reset();
   game.start(mode);
@@ -87,7 +99,7 @@ async function startGame(mode) {
     store.set('headbanger.tutSeen', '1');
     ui.biome('TRAINING DAY');
     tutorial.start();
-  } else ui.biome('NEON ROOFTOPS');
+  } else ui.biome(STYLE.mode === 'grid' ? 'THE GRID' : 'NEON ROOFTOPS');
 }
 function toMenu() {
   tutorial.stop(); game.running = false; audio.stop();

@@ -169,3 +169,29 @@ h2{font-size:72px;color:var(--red);-webkit-text-stroke:3px var(--ink);text-shado
 #tut-card.brief #btn-gotit{display:inline-block;margin-top:12px;font-family:'Bangers';font-size:28px;padding:4px 22px;border:3px solid var(--ink);background:var(--ink);color:var(--yel);box-shadow:4px 4px 0 var(--mag);cursor:pointer;animation:wob .5s infinite alternate}
 #tut-card.brief #tut-hint{display:block;margin-top:6px;font-size:12px;font-weight:700;opacity:.7;text-transform:uppercase;letter-spacing:.08em}
 @media (max-width:600px){#tut-card.brief{transform:translate(-50%,-50%) rotate(-1.5deg) scale(1.05)}}
+
+/* ---------- style picker ---------- */
+.style-pick{margin:4px 0 16px}
+.sp-title{font-family:'Bangers';font-size:22px;letter-spacing:.12em;margin-bottom:8px}
+.sp-row{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.panel .style-card{flex:1 1 180px;max-width:230px;text-align:left;padding:10px 14px;font-size:inherit;transform:none;cursor:pointer;opacity:.55;transition:transform .12s,opacity .12s;box-shadow:4px 4px 0 var(--ink)}
+.panel .style-card b{display:block;font-size:34px;line-height:1}
+.panel .style-card span{display:block;font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;margin-top:4px;letter-spacing:0}
+.panel .style-card.comic{background:var(--yel);color:var(--ink);font-family:'Bangers'}
+.panel .style-card.comic b{color:var(--mag);-webkit-text-stroke:1px var(--ink)}
+.panel .style-card.grid{background:#05060c;color:#bfefff;border-color:#00e5ff;font-family:'Orbitron',sans-serif;box-shadow:0 0 0 2px #00e5ff55,0 0 18px #00e5ff66}
+.panel .style-card.grid b{font-size:28px;color:#fff;text-shadow:0 0 8px #00e5ff,0 0 18px #00e5ff;letter-spacing:.12em}
+.panel .style-card.sel{opacity:1;transform:rotate(-2deg) scale(1.06)}
+.panel .style-card:hover{opacity:1}
+
+/* ---------- GRID theme ---------- */
+body.grid .screen{background:radial-gradient(circle at 50% 120%,#00e5ff33,transparent 60%),repeating-linear-gradient(#00e5ff12 0 1px,transparent 1px 28px),repeating-linear-gradient(90deg,#00e5ff12 0 1px,transparent 1px 28px),#02030acc}
+body.grid .panel{background:#05060cf2;color:#d8f6ff;border-color:#00e5ff;box-shadow:0 0 0 2px #00e5ff44,0 0 40px #00e5ff44;transform:none}
+body.grid h1{font-family:'Orbitron',sans-serif;font-weight:900;color:#fff;-webkit-text-stroke:0;text-shadow:0 0 10px #00e5ff,0 0 26px #00e5ff;transform:none;font-size:min(9vw,60px);letter-spacing:.06em}
+body.grid h1 span{color:#ff1f3d;text-shadow:0 0 10px #ff1f3d,0 0 26px #ff1f3d}
+body.grid .tag,body.grid .sp-title{color:#7fdfff}
+body.grid .panel button#btn-play,body.grid .panel button#btn-again{font-family:'Orbitron',sans-serif;background:#00e5ff;color:#02030a;border-color:#00e5ff;box-shadow:0 0 22px #00e5ff;transform:none}
+body.grid #score{color:#fff;-webkit-text-stroke:0;text-shadow:0 0 10px #00e5ff;font-family:'Orbitron',sans-serif;font-size:36px}
+body.grid #combo{color:#00e5ff;text-shadow:0 0 8px #00e5ff;-webkit-text-stroke:0}
+body.grid #weapon-name{font-family:'Orbitron',sans-serif;font-size:20px;color:#fff;text-shadow:0 0 8px #00e5ff;-webkit-text-stroke:0}
+body.grid h2{font-family:'Orbitron',sans-serif;color:#ff1f3d;text-shadow:0 0 14px #ff1f3d;-webkit-text-stroke:0}

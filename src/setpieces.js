@@ -2,6 +2,7 @@
 // fever-dream set pieces: mechs, sky eyes, sky traffic, a huge sub, satellites, a cat paw, moai heads, a jetpack whale, a sky DJ.
 import * as THREE from 'three';
 import { toon, flat } from './world.js';
+import { isGrid } from './style.js';
 
 const BOX = new THREE.BoxGeometry(1, 1, 1);
 const CYL = new THREE.CylinderGeometry(1, 1, 1, 14);
@@ -225,6 +226,20 @@ function buildDJ() {
   return g;
 }
 
+// ---------------------------------------------------------------- GRID MODE pieces
+function buildBike(color) {
+  const g = new THREE.Group();
+  const blk = toon(0x0a0a12), glow = flat(color);
+  g.add(m(BOX, blk, 0, 0.7, 0, 0.6, 0.5, 2.6), m(BOX, glow, 0, 0.98, 0, 0.62, 0.05, 2.62));
+  for (const z of [-1.05, 1.05]) { const w = m(CYL, blk, 0, 0.55, z, 0.55, 0.3, 0.55); w.rotation.z = Math.PI / 2; g.add(w); const r = m(CYL, glow, 0, 0.55, z, 0.57, 0.08, 0.57); r.rotation.z = Math.PI / 2; g.add(r); }
+  // rider (faceless, white)
+  g.add(m(BOX, toon(0xf4f6ff), 0, 1.3, 0.3, 0.45, 0.6, 0.7), m(SPH, toon(0xf4f6ff), 0, 1.75, -0.1, 0.25, 0.25, 0.25), m(BOX, glow, 0, 1.76, -0.32, 0.3, 0.05, 0.05));
+  const trail = new THREE.Mesh(BOX, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.75, depthWrite: false }));
+  trail.scale.set(0.08, 0.9, 1); trail.position.y = 0.6; g.add(trail);
+  g.userData = { trail };
+  return g;
+}
+
 export class SetPieces {
   constructor(scene, world) { this.scene = scene; this.world = world; this.items = []; this.nextAt = -60; this.last = ''; }
   reset() { for (const it of this.items) this.scene.remove(it.obj); this.items = []; this.nextAt = -30; this.last = ''; }
@@ -290,6 +305,22 @@ export class SetPieces {
     }
     if (type === 'whale') { const wh = buildWhale(); wh.position.set(-26, 44, 0); wh.scale.setScalar(1.3); g.add(wh); it.parts.push({ wh }); it.follow = 120; it.life = 16; it.spout = 0; it.bits = []; }
     if (type === 'dj') { const dj = buildDJ(); dj.position.set(0, 34, 0); dj.scale.setScalar(1.8); g.add(dj); it.parts.push({ dj }); it.follow = 115; it.life = 13; }
+    if (type === 'bikes') { // light bikes racing alongside you, dragging light walls
+      const cols = [0x00e5ff, 0xff7a00, 0xff1f3d, 0xffffff];
+      for (let i = 0; i < 4; i++) {
+        const bike = buildBike(cols[i]); const side = i % 2 ? 1 : -1;
+        bike.position.set(side * (7 + (i >> 1) * 5), 0, -14 - i * 9); bike.scale.setScalar(1.6);
+        g.add(bike); it.parts.push({ bike, side, x0: bike.position.x, z0: bike.position.z, ph: Math.random() * 6, len: 1 });
+      }
+      it.follow = 0; it.life = 12;
+    }
+    if (type === 'rings') { // giant ring gates over the track, pulsing on the beat
+      const cols = [0x00e5ff, 0xff2e88, 0xff7a00, 0xffffff];
+      for (let i = 0; i < 6; i++) {
+        const r = new THREE.Mesh(new THREE.TorusGeometry(9, 0.25, 6, 48), flat(cols[i % cols.length]));
+        r.position.set(0, 4, -i * 22); g.add(r); it.parts.push({ r, ph: i * 0.6 });
+      }
+    }
     this.items.push(it);
   }
 
@@ -297,7 +328,7 @@ export class SetPieces {
     for (const it of this.items) it.lookX = playerX;
     // a new oddity roughly every 130m
     if (playerZ < this.nextAt) {
-      const types = ['mechs', 'eyes', 'satellites', 'submarine', 'sedan', 'paw', 'moai', 'whale', 'dj', 'mechs', 'eyes', 'paw', 'whale', 'dj'].filter((t) => t !== this.last);
+      const types = (isGrid() ? ['bikes', 'rings', 'satellites', 'bikes', 'rings', 'mechs'] : ['mechs', 'eyes', 'satellites', 'submarine', 'sedan', 'paw', 'moai', 'whale', 'dj', 'mechs', 'eyes', 'paw', 'whale', 'dj']).filter((t) => t !== this.last);
       const type = types[Math.floor(Math.random() * types.length)];
       this.last = type; this.spawn(type, playerZ - 185);
       this.nextAt = playerZ - 150;
@@ -349,6 +380,17 @@ export class SetPieces {
       }
       if (it.follow) it.obj.position.z = playerZ - it.follow;
       if (it.life != null && it.type !== 'eyes') { it.life -= dt; if (it.life <= 0) { this.scene.remove(it.obj); this.items.splice(i, 1); continue; } }
+      if (it.type === 'bikes') {
+        it.obj.position.z = playerZ; // ride along with you
+        for (const p of it.parts) {
+          const b = p.bike; b.position.z = p.z0 + Math.sin(it.t * 0.5 + p.ph) * 8; // jostling for position beside you
+          b.position.x = p.x0 + Math.sin(it.t * 0.9 + p.ph) * 1.5;
+          b.rotation.z = -Math.cos(it.t * 0.9 + p.ph) * 0.2;
+          p.len = Math.min(30, p.len + dt * 20);
+          const tr = b.userData.trail; tr.scale.z = p.len / 1.6; tr.position.z = 1.3 + p.len / 3.2;
+        }
+      }
+      if (it.type === 'rings') for (const p of it.parts) { p.r.scale.setScalar(1 + beatPulse * 0.08); p.r.rotation.z += dt * 0.4; }
       if (it.type === 'paw') { // reach down out of the swirly sky, bat across the road, pull back up
         const p = it.parts[0], t = it.t;
         const down = t < 2.2 ? t / 2.2 : t < 5.5 ? 1 : Math.max(0, 1 - (t - 5.5) / 2);
