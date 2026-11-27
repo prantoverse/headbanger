@@ -96,6 +96,7 @@ export class Tutorial {
     setTimeout(() => this.next(), 900);
   }
   stop() {
+    this.ack();
     this.active = false; this.game.world.forceWalls = false;
     this.game.onEvent = null; this.ui.tutorial(false); this.ui.pulseHint(false);
   }
@@ -109,9 +110,19 @@ export class Tutorial {
     this.state = {}; this.wait = false;
     if (st.init) st.init(this.state, this.game);
     this.ui.setStep(this.i + 1, this.steps.length, st.title, st.text);
+    this.brief();
+  }
+  brief() {
+    this.briefing = true; this.game.briefing = true; this.briefAt = performance.now();
+    this.ui.setBrief(true); this.game.audio.sfx('tapeStop');
+  }
+  ack() {
+    if (!this.briefing) return;
+    this.briefing = false; this.game.briefing = false;
+    this.ui.setBrief(false); this.game.audio.sfx('tapeStart');
   }
   handle(ev, d) {
-    if (!this.active || this.wait || this.i < 0) return;
+    if (!this.active || this.wait || this.i < 0 || this.briefing) return;
     const st = this.steps[this.i];
     if (st.on(this.state, ev, d)) {
       this.wait = true;
@@ -123,6 +134,7 @@ export class Tutorial {
     }
   }
   update() {
+    if (this.briefing && performance.now() - this.briefAt > 6000) this.ack(); // auto-continue
     if (!this.active || this.wait || this.i < 0) return;
     const st = this.steps[this.i];
     if (st.ensure) st.ensure(this.game, this.state);

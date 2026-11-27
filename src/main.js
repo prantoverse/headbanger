@@ -98,6 +98,7 @@ document.getElementById('btn-play').addEventListener('click', () => startGame())
 document.getElementById('btn-again').addEventListener('click', () => startGame('run'));
 document.getElementById('btn-menu').addEventListener('click', toMenu);
 notepad.addEventListener('click', () => startGame('tutorial'));
+document.getElementById('tut-card').addEventListener('pointerdown', (e) => { e.stopPropagation(); tutorial.ack(); });
 document.getElementById('btn-skip').addEventListener('pointerdown', (e) => { e.stopPropagation(); startGame('run'); });
 
 // ---------------------------------------------------------------- input
@@ -107,6 +108,7 @@ const touches = new Map();
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 canvas.addEventListener('pointerdown', (e) => {
   if (!game.running) return;
+  if (tutorial.briefing) { tutorial.ack(); return; }
   pointer.x = e.clientX; pointer.y = e.clientY; ui.moveCrosshair(e.clientX, e.clientY);
   game.setAim(e.clientX, e.clientY);
   if (e.pointerType === 'mouse') {
@@ -144,6 +146,7 @@ addEventListener('keydown', (e) => {
   if (!game.running) { if (e.code === 'Enter' || e.code === 'Space') { const vis = !document.getElementById('menu').classList.contains('hidden') || !document.getElementById('over').classList.contains('hidden'); if (vis) startGame(); } return; }
   if (e.ctrlKey || e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault(); // Ctrl = slide; stop Ctrl+D/S/A browser shortcuts
   if (e.repeat) return;
+  if (tutorial.briefing) { if (e.code !== 'Escape') { tutorial.ack(); return; } }
   switch (e.code) {
     case 'KeyA': case 'ArrowLeft': game.lane(-1); break;
     case 'KeyD': case 'ArrowRight': game.lane(1); break;

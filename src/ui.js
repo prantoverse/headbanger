@@ -82,6 +82,7 @@ export class UI {
     el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump');
     if (pct > 0) { const r = $('charge-bar').getBoundingClientRect(); this.pop('+10%', r.left - 30, r.top + r.height * (1 - pct / 100), '#ffe600', 34); }
   }
+  setBrief(on) { $('tut-card').classList.toggle('brief', on); }
   pulseHint(on) { this.beatRing.classList.toggle('hint', on); }
   readySplash() {
     const r = $('ready'); r.classList.remove('hidden');

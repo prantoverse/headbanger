@@ -146,7 +146,7 @@ export class Game {
     this.stats = { kills: 0, heads: 0, beats: 0, dist: 0, best: 0 };
     this.timeScale = 1; this.targetScale = 1;
     this.focus = 0;             // seconds of bullet time remaining (real)
-    this.bulletTime = false; this.focusKills = 0; this.alertKey = '';
+    this.bulletTime = false; this.focusKills = 0; this.alertKey = ''; this.briefing = false;
     this.headStreak = 0; this.focusCharges = 0; this.heat = 1; this.ui.setHeat(1);
     this.goofy.reset();
     for (const sh of this.shards || []) this.scene.remove(sh.m);
@@ -765,6 +765,7 @@ export class Game {
     const beatIdx = Math.floor(step / 4);
     if (inBeat === 0 && this.biomeIndex >= 0) this.ui.beat();
     if (this.bulletTime) { if (inBeat === 0) this.audio.sfx('heart'); return; }
+    if (this.briefing) return; // nobody shoots while you read
     for (const e of this.enemies) {
       if (!e.alive || !e.landed || e.passive) continue;
       const dz = this.p.z - e.obj.position.z;
@@ -807,6 +808,7 @@ export class Game {
 
     // time scale: hitstop > bullet time > auto slow > normal
     let target = this.targetScale;
+    if (this.briefing) target = 0.05;
     if (this.autoSlow > 0) { this.autoSlow -= realDt; target = Math.min(target, this.autoSlowScale); }
     this.autoSlowCd -= realDt;
     if (this.hitstop > 0) { this.hitstop -= realDt; this.timeScale = 0.03; }
@@ -814,7 +816,7 @@ export class Game {
     if (p.dead) this.timeScale = Math.max(0.12, this.timeScale);
     const dt = realDt * this.timeScale;
     this.time += dt;
-    this.audio.update(realDt, this.timeScale, this.bulletTime, this.goofy.groove > 0);
+    this.audio.update(realDt, this.timeScale, this.bulletTime || this.briefing, this.goofy.groove > 0);
 
     // focus timer
     if (this.bulletTime) {
@@ -1090,7 +1092,8 @@ export class Game {
     let al = null;
     const touchUI = matchMedia('(pointer:coarse)').matches;
     if (!p.dead) {
-      if (this.bulletTime) al = ['focus', 'FOCUS', touchUI ? 'TAP THE GOONS' : 'CLICK THE GOONS', '#00e5ff', true];
+      if (this.briefing) al = null;
+      else if (this.bulletTime) al = ['focus', 'FOCUS', touchUI ? 'TAP THE GOONS' : 'CLICK THE GOONS', '#00e5ff', true];
       else if (this.hazards.some((h) => h.kind === 'cross' && h.armed && (p.z - h.obj.position.z) / this.speed < 1.5 && p.z - h.obj.position.z > 0)) al = ['rocketX', 'ROCKET!', touchUI ? 'SWIPE ↓ SLIDE  or  ↑ JUMP' : 'SLIDE ↓  or  JUMP ↑', '#ff7a00'];
       else if (this.hazards.some((h) => h.kind === 'dive' && h.armed && (p.z - h.obj.position.z) / this.speed < 1.6 && p.z - h.obj.position.z > 0)) al = ['rocketD', 'ROCKET!', 'CHANGE LANE', '#ff7a00'];
       else if (p.ammo <= 0 && !WEAPONS[p.weapon].melee) al = ['throw', 'THROW YOUR GUN!', touchUI ? 'HIT  THROW' : 'PRESS  F  /  RIGHT-CLICK', '#ff1f3d'];
@@ -1103,6 +1106,7 @@ export class Game {
     this.goofy.update(realDt, dt);
     const u = this.post.u;
     u.trip.value = this.goofy.trip; u.beat.value = this.world.beatPulse;
+    u.dim.value += ((this.briefing ? 1 : 0) - u.dim.value) * (1 - Math.exp(-realDt * 8));
     u.time.value += realDt;
     u.slow.value += ((this.timeScale < 0.6 ? 1 : 0) - u.slow.value) * (1 - Math.exp(-realDt * 8));
     this.impact = Math.max(0, this.impact - realDt * 9); u.impact.value = this.impact > 0.5 ? 1 : 0;

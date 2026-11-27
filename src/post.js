@@ -12,7 +12,7 @@ precision highp float;
 uniform sampler2D tColor;
 uniform sampler2D tDepth;
 uniform vec2 res;
-uniform float time, slow, impact, shift, speed, near, far, dotScale, hurt, paint, trip, beat;
+uniform float time, slow, impact, shift, speed, near, far, dotScale, hurt, paint, trip, beat, dim;
 uniform vec3 inkCol, paperCol, shadowTint;
 varying vec2 vUv;
 
@@ -89,6 +89,22 @@ void main(){
   col *= 1.0 - smoothstep(0.42, 0.95, rad) * (0.42 + slow * 0.3);
   col = mix(col, vec3(1.0, 0.1, 0.25), hurt * smoothstep(0.3, 0.9, rad) * 0.8);
 
+  // --- briefing: blur, darken and desaturate the world behind the instruction card
+  if (dim > 0.01) {
+    vec3 bl = vec3(0.0);
+    float rr = 6.0 * dim;
+    for (int i = 0; i < 8; i++) {
+      float a = float(i) * 0.7854;
+      bl += srgb(texture2D(tColor, vUv + vec2(cos(a), sin(a)) * px * rr).rgb);
+      bl += srgb(texture2D(tColor, vUv + vec2(cos(a + 0.39), sin(a + 0.39)) * px * rr * 2.2).rgb);
+    }
+    bl /= 16.0;
+    float lb = luma(bl);
+    bl = mix(vec3(lb), bl, 0.35) * 0.45;
+    bl *= 1.0 - smoothstep(0.2, 0.85, rad) * 0.7;
+    col = mix(col, bl, dim);
+  }
+
   // --- impact frame: hard threshold black / white / red ---
   if (impact > 0.01) {
     float th = step(0.42, L);
@@ -113,7 +129,7 @@ export class ComicPost {
       uniforms: {
         tColor: { value: this.rt.texture }, tDepth: { value: this.rt.depthTexture },
         res: { value: size.clone() }, time: { value: 0 }, slow: { value: 0 }, impact: { value: 0 },
-        shift: { value: 1.5 }, speed: { value: 0 }, hurt: { value: 0 }, paint: { value: 1 }, trip: { value: 0 }, beat: { value: 0 },
+        shift: { value: 1.5 }, speed: { value: 0 }, hurt: { value: 0 }, paint: { value: 1 }, trip: { value: 0 }, beat: { value: 0 }, dim: { value: 0 },
         near: { value: camera.near }, far: { value: camera.far },
         dotScale: { value: 6.5 * Math.max(1, renderer.getPixelRatio()) },
         inkCol: { value: new THREE.Color(0x0b0410) },
