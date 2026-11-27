@@ -216,7 +216,7 @@ export class World {
 
   reset() {
     for (const c of this.chunks) this.scene.remove(c.group);
-    this.chunks = []; this.animated = []; this.nextZ = 8; this.clearZones = [];
+    this.chunks = []; this.animated = []; this.nextZ = 8; this.clearZones = []; this.gaps = [];
     if (this.portal) { this.scene.remove(this.portal); this.portal = null; }
     this.portalZ = -Infinity; this.pendingBiome = 0; this.biome = 0;
     const b = BIOMES[0];
@@ -304,17 +304,19 @@ export class World {
     const bi = this.biomeAt(z0 - CHUNK / 2);
     const b = BIOMES[bi];
     const g = new THREE.Group();
-    const c = { z0, group: g, biome: bi, wallL: this.forceWalls || Math.random() < 0.55, wallR: this.forceWalls || Math.random() < 0.55 };
+    const gap = (this.gaps || []).find((q) => z0 <= q.a && z0 > q.b); // lava pit: no floor; walls only over the wall-run half
+    const gw = gap ? z0 <= gap.wallFrom : null;
+    const c = { z0, group: g, biome: bi, wallL: gap ? gw : this.forceWalls || Math.random() < 0.55, wallR: gap ? gw : this.forceWalls || Math.random() < 0.55 };
     const zc = z0 - CHUNK / 2;
     const idx = Math.round(-z0 / CHUNK);
     const acc = (i) => b.accents[i % b.accents.length];
     const anim = (obj, fn) => this.animated.push({ chunk: c, obj, fn });
 
     // floor: checker strip per lane
-    for (let i = 0; i < 3; i++) {
+    if (!gap) for (let i = 0; i < 3; i++) {
       g.add(mesh(box, toon((i + idx) % 2 ? b.floor : b.floor2), LANES[i], -0.25, zc, 2.18, 0.5, CHUNK - 0.04));
     }
-    if (!isGrid()) for (const x of [-1.1, 1.1]) g.add(mesh(box, flat(acc(1)), x, 0.01, zc, 0.06, 0.02, CHUNK)); // lane stripes (neon)
+    if (gap) { /* open lava */ } else if (!isGrid()) for (const x of [-1.1, 1.1]) g.add(mesh(box, flat(acc(1)), x, 0.01, zc, 0.06, 0.02, CHUNK)); // lane stripes (neon)
     else { // checker tiles + a single bright neon outline on the track edges
       for (let k = 0; k < CHUNK / 2; k++) for (let l = 0; l < 3; l++)
         g.add(mesh(box, toon((k + l + idx) % 2 ? b.floor2 : b.floor), LANES[l], 0.005, z0 - k * 2 - 1, 2.18, 0.02, 1.98));

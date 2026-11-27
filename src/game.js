@@ -1,3 +1,4 @@
+import { Grapple } from './grapple.js';
 // Core gameplay: player, enemies, weapons, bullets, hazards, power-ups, scoring.
 import * as THREE from 'three';
 import { BEAT, LOOP_LEN } from './audio.js';
@@ -186,6 +187,7 @@ export class Game {
     this.markGroup = new THREE.Group(); scene.add(this.markGroup);
     this.running = false;
     this.goofy = new Goofy(this);
+    this.grap = new Grapple(this);
   }
 
   // ------------------------------------------------------------ lifecycle
@@ -208,7 +210,7 @@ export class Game {
     this.focus = 0;             // seconds of bullet time remaining (real)
     this.bulletTime = false; this.focusKills = 0; this.alertKey = ''; this.briefing = false;
     this.headStreak = 0; this.focusCharges = 0; this.heat = 1; this.ui.setHeat(1);
-    this.goofy.reset();
+    this.goofy.reset(); this.grap.reset();
     for (const sh of this.shards || []) this.scene.remove(sh.m);
     this.shards = []; this.ui.setStreak(0, false); this.ui.setRicochet(false);
     this.aim = { x: 0, y: 0 }; this.aimS = { x: 0, y: 0 };
@@ -250,6 +252,7 @@ export class Game {
   // ------------------------------------------------------------ input actions
   lane(dir) {
     const p = this.p; if (p.dead) return;
+    if (this.grap.onLane(dir)) return;
     if (p.wall) { // jump off the wall back toward the middle
       if (dir === -p.wallSide) { p.wall = 0; p.vy = 4; p.lane = 1; }
       return;
@@ -261,6 +264,7 @@ export class Game {
   }
   jump() {
     const p = this.p; if (p.dead) return;
+    if (this.grap.onJumpOrSlide()) return;
     if (p.y > 0.05 || p.wall) return;
     const side = p.lane === 0 ? -1 : p.lane === 2 ? 1 : 0;
     if (side && this.world.wallAt(p.z - 2, side) && this.world.wallAt(p.z - 10, side)) {
@@ -274,6 +278,7 @@ export class Game {
   }
   slide() {
     const p = this.p; if (p.dead) return;
+    if (this.grap.onJumpOrSlide()) return;
     if (p.wall) { p.wall = 0; return; }
     if (p.y > 0.05) p.vy = -14; // slam down
     p.slide = 0.62; this.emit('slide');
@@ -317,7 +322,9 @@ export class Game {
     return best;
   }
 
+  grapple() { return this.grap.fire(); }
   fire(sx, sy) {
+    if (this.grap.tryTap(sx, sy)) return;
     const p = this.p; if (p.dead || !this.running) return;
     if (this.bulletTime) return this.focusShot(sx, sy);
     if (p.cool > 0) return;
@@ -676,7 +683,7 @@ export class Game {
   hurt(src) {
     const p = this.p;
     if (p.invuln > 0 || p.dead) return;
-    const CAUSE = { bullet: 'SHOT!', shuriken: "SHURIKEN'D!", bonk: 'BONKED!', slash: 'SLASHED!', bump: 'BODY-CHECKED!', rocket: 'ROCKET!', barrier: 'BARRIER!', duck: 'DUCKED!' };
+    const CAUSE = { bullet: 'SHOT!', shuriken: "SHURIKEN'D!", bonk: 'BONKED!', slash: 'SLASHED!', bump: 'BODY-CHECKED!', rocket: 'ROCKET!', barrier: 'BARRIER!', duck: 'DUCKED!', lava: isGrid() ? 'VOIDED!' : 'LAVA BATH!' };
     const label = CAUSE[src] || 'HIT!';
     this.lastCause = label;
     if (this.mode === 'tutorial') {
@@ -741,6 +748,8 @@ export class Game {
     const maxAhead = Math.min(7, 3 + Math.ceil(H / 2));
     const n = Math.max(0, Math.min(want, maxAhead - ahead));
     const zBase = 26 + this.speed * 0.4; // close enough that you watch them drop in
+    this.grap.onBar(bar);
+    if (this.grap.blocks(this.p.z - zBase) || this.grap.blocks(this.p.z - zBase - 10)) return;
     const used = new Set();
     for (let i = 0; i < n; i++) {
       const type = pool[Math.floor(Math.random() * pool.length)];
@@ -940,7 +949,8 @@ export class Game {
     // player movement — lateral uses real dt so you feel fast in slow-mo
     const quick = 1 - Math.exp(-realDt * 16);
     let tx = LANES[p.lane];
-    if (p.wall > 0) {
+    if (this.grap.drive(dt, realDt)) { tx = p.x; }
+    else if (p.wall > 0) {
       p.wall -= dt;
       tx = p.wallSide * (WALL_X - 0.75);
       p.y += (1.3 - p.y) * quick;
@@ -948,7 +958,7 @@ export class Game {
       if (p.wall <= 0 || !this.world.wallAt(p.z - 1, p.wallSide)) { p.wall = 0; p.vy = 3; p.lane = p.wallSide < 0 ? 0 : 2; }
     } else {
       p.vy -= 22 * dt; p.y += p.vy * dt;
-      if (p.y < 0) { p.y = 0; p.vy = 0; }
+      if (p.y < 0 && !this.grap.overPit(p.z)) { p.y = 0; p.vy = 0; } // no floor over the lava
       p.roll += (0 - p.roll) * quick;
     }
     p.x += (tx - p.x) * quick;
@@ -968,8 +978,8 @@ export class Game {
     // banana slip: a quick cartoon wobble (decaying), not a full roll
     if (p.spin > 0) p.spin = Math.max(0, p.spin - realDt * 1.6);
     const slip = p.spin > 0 ? Math.sin(p.spin * 22) * 0.22 * p.spin : 0;
-    this.camera.rotation.set(-0.03 - slip * 0.3, (this.p.x - tx) * -0.05, p.roll + slip);
-    const fovT = (this.camera.aspect < 1 ? 90 : 72) + (this.bulletTime ? -8 : 0) + (this.speed - 11) * 0.6;
+    this.camera.rotation.set(-0.03 - slip * 0.3 + (p.pitch || 0), (this.p.x - tx) * -0.05, p.roll + slip);
+    const fovT = (this.camera.aspect < 1 ? 90 : 72) + (this.bulletTime ? -8 : 0) + (this.speed - 11) * 0.6 + this.grap.fov;
     this.camera.fov += (fovT - this.camera.fov) * quick * 0.5; this.camera.updateProjectionMatrix();
 
     // body hit volume
@@ -1218,6 +1228,7 @@ export class Game {
     const touchUI = matchMedia('(pointer:coarse)').matches;
     if (!p.dead) {
       if (this.briefing) al = null;
+      else if (this.grap.alert(touchUI)) al = this.grap.alert(touchUI);
       else if (this.bulletTime) al = ['focus', 'FOCUS', touchUI ? 'TAP THE GOONS' : 'CLICK THE GOONS', '#00e5ff', true];
       else if (this.hazards.some((h) => h.kind === 'cross' && h.armed && (p.z - h.obj.position.z) / this.speed < 1.5 && p.z - h.obj.position.z > 0)) al = ['rocketX', 'ROCKET!', touchUI ? 'SWIPE ↓ SLIDE  or  ↑ JUMP' : 'SLIDE ↓  or  JUMP ↑', '#ff7a00'];
       else if (this.hazards.some((h) => h.kind === 'dive' && h.armed && (p.z - h.obj.position.z) / this.speed < 1.6 && p.z - h.obj.position.z > 0)) al = ['rocketD', 'ROCKET!', 'CHANGE LANE', '#ff7a00'];
@@ -1229,7 +1240,7 @@ export class Game {
     if (key !== this.alertKey) { this.alertKey = key; this.ui.setAlert(al && al[1], al && al[2], al && al[3], al && al[4]); }
 
     // post fx
-    this.goofy.update(realDt, dt);
+    this.goofy.update(realDt, dt); this.grap.update(dt, realDt, this.world.beatPulse);
     const u = this.post.u;
     u.trip.value = this.goofy.trip; u.beat.value = this.world.beatPulse;
     u.dim.value += ((this.briefing ? 1 : 0) - u.dim.value) * (1 - Math.exp(-realDt * 8));

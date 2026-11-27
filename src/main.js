@@ -166,6 +166,7 @@ addEventListener('keydown', (e) => {
     case 'KeyS': case 'ArrowDown': case 'ControlLeft': case 'ControlRight': case 'KeyC': game.slide(); break;
     case 'KeyF': game.throwWeapon(pointer.x, pointer.y); break;
     case 'KeyQ': game.activateFocus(); break;
+    case 'KeyE': game.grapple(); break;
     case 'Escape': toMenu(); break;
   }
 });
