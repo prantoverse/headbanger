@@ -273,6 +273,8 @@ export class AudioEngine {
         this._tone(t, { type: 'square', f0: 220, f1: 80, dur: 0.05, vol: 0.3, dist: true }); break;
       case 'slash':
         this._noise(t, { dur: 0.18, type: 'bandpass', freq: 6000, sweep: 1200, q: 2, vol: 0.6 }); break;
+      case 'clang':
+        [1800, 2690, 3970].forEach((f, i) => this._tone(t, { type: 'triangle', f0: f, f1: f * 0.98, dur: 0.5 - i * 0.1, vol: 0.18 })); this._noise(t, { dur: 0.06, freq: 6000, vol: 0.5 }); break;
       case 'shuriken':
         this._noise(t, { dur: 0.16, type: 'bandpass', freq: 5000, sweep: 9000, q: 4, vol: 0.4 }); this._tone(t, { type: 'triangle', f0: 3200, f1: 2600, dur: 0.06, vol: 0.12 }); break;
       case 'bonk':

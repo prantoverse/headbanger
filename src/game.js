@@ -299,6 +299,7 @@ export class Game {
     if (W.melee) {
       p.cool = W.rate;
       p.swing = 1; p.punchSide = -(p.punchSide || 1); // alternate jabs / swing direction
+      if (p.weapon === 'sword' && this.parry()) return;
       if (t && t.enemy && t.enemy.obj.position.z > p.z - W.melee && t.enemy.obj.position.z < p.z + 0.5) {
         const e = t.enemy;
         this.audio.sfx(W.sfx); this.vmKick(0.6); this.haptics(30);
@@ -843,7 +844,7 @@ export class Game {
       const m = new THREE.Group();
       if (star) { // spinning shuriken
         const sh = buildShuriken(0.22); m.add(sh); m.position.copy(muzzle); this.scene.add(m);
-        this.bullets.push({ obj: m, vel, t: 0, T, prevZ: muzzle.z, passed: false, star: sh, src: 'shuriken' });
+        this.bullets.push({ obj: m, vel, t: 0, T, prevZ: muzzle.z, passed: false, star: sh, src: 'shuriken', from: e });
         continue;
       }
       const core = new THREE.Mesh(SPH, flat(0xfff6e0)); core.scale.set(0.16, 0.16, 0.16);
@@ -851,7 +852,7 @@ export class Game {
       const tg = new THREE.Group(); tg.add(core, trail); m.add(tg);
       m.position.copy(muzzle); tg.lookAt(muzzle.clone().sub(vel)); // trail points back along path
       this.scene.add(m);
-      this.bullets.push({ obj: m, vel, t: 0, T, prevZ: muzzle.z, passed: false });
+      this.bullets.push({ obj: m, vel, t: 0, T, prevZ: muzzle.z, passed: false, from: e });
     }
     e.recoil = 1;
     this.audio.sfx(star ? 'shuriken' : 'enemyShot');
@@ -1028,6 +1029,24 @@ export class Game {
     // enemy bullets
     for (let i = this.bullets.length - 1; i >= 0; i--) {
       const b = this.bullets[i];
+      if (b.deflected) {
+        b.t += dt;
+        const tgt = b.from && b.from.alive ? b.from.obj.userData.head.getWorldPosition(this.tmpV2) : null;
+        if (tgt) {
+          const d = tgt.clone().sub(b.obj.position); const dist = d.length();
+          b.obj.position.addScaledVector(d.normalize(), Math.min(dist, b.speed * dt));
+          b.obj.lookAt(tgt);
+          if (dist < 0.8) {
+            const s2 = this.toScreen(tgt);
+            this.killEnemy(b.from, 'head', { point: tgt.clone() });
+            this.ui.pop('RETURN TO SENDER!', innerWidth / 2, innerHeight * 0.6, '#00e5ff', 44, true);
+            this.scene.remove(b.obj); this.bullets.splice(i, 1); continue;
+          }
+        } else b.obj.position.z -= b.speed * dt; // shooter's gone: fly off into the distance
+        if (b.star) b.star.rotation.z += dt * 40;
+        if (b.t > 3) { this.scene.remove(b.obj); this.bullets.splice(i, 1); }
+        continue;
+      }
       b.prevZ = b.obj.position.z;
       b.obj.position.addScaledVector(b.vel, dt);
       if (b.star) { b.star.rotation.z += dt * 30; b.star.rotation.x = 1.2; }
@@ -1170,6 +1189,7 @@ export class Game {
       else if (this.bulletTime) al = ['focus', 'FOCUS', touchUI ? 'TAP THE GOONS' : 'CLICK THE GOONS', '#00e5ff', true];
       else if (this.hazards.some((h) => h.kind === 'cross' && h.armed && (p.z - h.obj.position.z) / this.speed < 1.5 && p.z - h.obj.position.z > 0)) al = ['rocketX', 'ROCKET!', touchUI ? 'SWIPE ↓ SLIDE  or  ↑ JUMP' : 'SLIDE ↓  or  JUMP ↑', '#ff7a00'];
       else if (this.hazards.some((h) => h.kind === 'dive' && h.armed && (p.z - h.obj.position.z) / this.speed < 1.6 && p.z - h.obj.position.z > 0)) al = ['rocketD', 'ROCKET!', 'CHANGE LANE', '#ff7a00'];
+      else if (p.weapon === 'sword' && this.bullets.some((b) => !b.passed && !b.deflected && p.z - b.obj.position.z < 10 && p.z - b.obj.position.z > 0)) al = ['parry', 'PARRY IT!', touchUI ? 'TAP TO SLASH IT BACK' : 'CLICK TO SLASH IT BACK', '#00e5ff'];
       else if (p.ammo <= 0 && !WEAPONS[p.weapon].melee) al = ['throw', 'THROW YOUR GUN!', touchUI ? 'HIT  THROW' : 'PRESS  F  /  RIGHT-CLICK', '#ff1f3d'];
       else if (p.weapon === 'fists') al = ['grab', 'PUNCH A GOON!', touchUI ? 'TAP A GOON TO DISARM & STEAL' : 'CLICK A GOON TO DISARM & STEAL', '#ffe600'];
     }
@@ -1194,6 +1214,29 @@ export class Game {
     const s = this.toScreen(point);
     this.ui.pop('SQUEAK!', s.x, s.y - 30, '#ffd21a', 58, true);
     this.audio.sfx('squeak'); this.addScore(80, false); this.haptics(25);
+  }
+
+  // KATANA PARRY: slash bullets/shurikens that are about to hit you back at whoever fired them
+  parry() {
+    const p = this.p; let n = 0;
+    for (const b of this.bullets) {
+      if (b.deflected || b.passed) continue;
+      const dz = p.z - b.obj.position.z;
+      if (dz < -0.3 || dz > 8 || Math.abs(b.obj.position.x - p.x) > 2.6) continue;
+      b.deflected = true; b.passed = true; n++;
+      b.speed = 46;
+      b.obj.traverse((o) => { if (o.isMesh) o.material = flat(0x00e5ff); });
+      const s2 = this.toScreen(b.obj.position);
+      this.ui.burst(s2.x, s2.y, '#00e5ff');
+      this.spray(b.obj.position, 0xfff6e0, 10, 6);
+    }
+    if (!n) return false;
+    this.audio.sfx('clang'); this.audio.sfx('slash'); this.haptics([15, 25, 40]);
+    this.ui.pop(n > 1 ? 'PARRY ×' + n + '!' : 'PARRY!', innerWidth / 2, innerHeight * 0.42, '#00e5ff', 64, true);
+    this.vmKick(0.8); this.impact = 0.8;
+    this.autoSlow = 0.35; this.autoSlowScale = 0.25; this.autoSlowCd = 1.2;
+    this.addScore(120 * n);
+    return true;
   }
 
   explode(h, pos) {
