@@ -39,7 +39,9 @@ const game = new Game({ scene, camera, audio, world, ui, post, haptics });
 // attract-mode camera before play
 camera.position.set(0, 1.6, 0);
 
-let best = 0;
+import { LB, boardHTML, nameChip } from './leaderboard.js';
+
+let best = 0, runStart = 0;
 try { best = +localStorage.getItem('headbanger.best') || 0; } catch (e) {}
 const bestEl = document.getElementById('best');
 const showBest = () => (bestEl.textContent = best ? `BEST: ${best.toLocaleString()}` : '');
@@ -51,9 +53,36 @@ game.onGameOver = () => {
   const newBest = s > best;
   if (newBest) { best = s; try { localStorage.setItem('headbanger.best', String(best)); } catch (e) {} }
   document.getElementById('final').innerHTML =
-    `<b>${s.toLocaleString()}</b>${game.lastCause ? 'KILLED BY: ' + game.lastCause + '<br>' : ''}${newBest ? 'NEW BEST!<br>' : ''}${st.kills} KILLS · ${st.heads} HEADSHOTS<br>${st.beats} ON THE BEAT · ${Math.round(st.dist)}m`;
+    `<b>${s.toLocaleString()}</b>${newBest ? '<span class="nb">NEW BEST!</span>' : ''}${game.lastCause ? '<div class="cause">KILLED BY: ' + game.lastCause + '</div>' : ''}<div class="stats">${st.kills} KILLS · ${st.heads} HEADSHOTS · ${st.beats} ON THE BEAT · ${Math.round(st.dist)}m</div>`;
   ui.show('hud', false); ui.show('over', true); showBest();
+  // global leaderboard
+  const lbEl = document.getElementById('lb-result');
+  nameChip(document.getElementById('over-name'));
+  if (game.mode !== 'run' || s <= 0) { lbEl.innerHTML = ''; return; }
+  lbEl.innerHTML = '<div class="lb-empty">Posting your score…</div>';
+  const style = STYLE.mode, secs = (performance.now() - runStart) / 1000;
+  LB.submit(s, style, secs, game.heat).then(async (r) => {
+    const data = await LB.board(style, 'week');
+    const head = r && !r.error ? `<div class="lb-ranks">${style.toUpperCase()} · WEEK <b>#${r.week_rank}</b> · ALL-TIME <b>#${r.all_rank}</b></div>` : '';
+    lbEl.innerHTML = head + boardHTML(data, 3);
+  });
 };
+
+// leaderboard screen
+const lbState = { style: 'comic', period: 'week' };
+async function drawLB() {
+  for (const [id, key] of [['lb-style', 'style'], ['lb-period', 'period']])
+    document.querySelectorAll(`#${id} button`).forEach((b) => b.classList.toggle('on', b.dataset.v === lbState[key]));
+  document.getElementById('lb-list').innerHTML = '<div class="lb-empty">Loading…</div>';
+  document.getElementById('lb-list').innerHTML = boardHTML(await LB.board(lbState.style, lbState.period));
+}
+for (const [id, key] of [['lb-style', 'style'], ['lb-period', 'period']])
+  document.querySelectorAll(`#${id} button`).forEach((b) => b.addEventListener('click', () => { lbState[key] = b.dataset.v; drawLB(); }));
+document.getElementById('btn-lb').addEventListener('click', () => {
+  lbState.style = STYLE.mode; ui.show('menu', false); ui.show('lb', true);
+  nameChip(document.getElementById('lb-name'), drawLB); drawLB();
+});
+document.getElementById('btn-lb-close').addEventListener('click', () => { ui.show('lb', false); ui.show('menu', true); });
 
 // ---------------------------------------------------------------- menu + tutorial flags
 const store = {
@@ -65,7 +94,7 @@ function refreshMenu() {
   const done = store.get('headbanger.tutorial') === '1';
   notepad.classList.remove('done'); void notepad.offsetWidth;
   notepad.classList.toggle('done', done);
-  document.getElementById('menu-hint').textContent = store.get('headbanger.tutSeen') ? 'Space / Enter to play' : 'First time? PLAY starts with a quick tutorial.';
+  document.getElementById('menu-hint').textContent = store.get('headbanger.tutSeen') ? 'Space / Enter to play' : 'New? Just hit PLAY. Want the full drill? Tap the notepad.';
 }
 refreshMenu();
 
@@ -84,7 +113,7 @@ const tutorial = new Tutorial(game, ui, () => startGame('run'));
 
 let audioReady = null;
 async function startGame(mode) {
-  if (typeof mode !== 'string') mode = store.get('headbanger.tutSeen') ? 'run' : 'tutorial';
+  if (typeof mode !== 'string') mode = 'run'; // straight into the action; the tutorial lives on the notepad
   if (tutorial.active || mode === 'run') tutorial.stop();
   if (!audioReady) audioReady = audio.init();
   audio.resume && audio.ctx && audio.resume();
@@ -93,7 +122,7 @@ async function startGame(mode) {
   await audioReady; await audio.loadStyle(STYLE.mode); audio.resume(); playBtn.textContent = label;
   ui.show('menu', false); ui.show('over', false); ui.show('hud', true);
   world.reset(); setpieces.reset();
-  game.start(mode);
+  game.start(mode); store.set('headbanger.tutSeen', '1'); runStart = performance.now();
   audio.play(0);
   if (mode === 'tutorial') {
     store.set('headbanger.tutSeen', '1');
@@ -155,6 +184,8 @@ canvas.addEventListener('pointerup', endTouch);
 canvas.addEventListener('pointercancel', endTouch);
 
 addEventListener('keydown', (e) => {
+  if (e.target && e.target.tagName === 'INPUT') return; // typing a name
+  if (!document.getElementById('lb').classList.contains('hidden')) { if (e.code === 'Escape') document.getElementById('btn-lb-close').click(); return; }
   if (!game.running) { if (e.code === 'Enter' || e.code === 'Space') { const vis = !document.getElementById('menu').classList.contains('hidden') || !document.getElementById('over').classList.contains('hidden'); if (vis) startGame(); } return; }
   if (e.ctrlKey || e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault(); // Ctrl = slide; stop Ctrl+D/S/A browser shortcuts
   if (e.repeat) return;

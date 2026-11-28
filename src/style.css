@@ -199,3 +199,41 @@ body.grid #weapon-name{max-width:60vw;white-space:nowrap;overflow:hidden;text-ov
 body.grid #combo{color:#00e5ff;text-shadow:0 0 8px #00e5ff;-webkit-text-stroke:0}
 body.grid #weapon-name{font-family:'Orbitron',sans-serif;font-size:clamp(14px,3.6vw,20px);color:#fff;text-shadow:0 0 8px #00e5ff;-webkit-text-stroke:0}
 body.grid h2{font-family:'Orbitron',sans-serif;color:#ff1f3d;text-shadow:0 0 14px #ff1f3d;-webkit-text-stroke:0}
+
+/* leaderboard */
+.panel button.lb-open{display:block;margin:6px auto 0;font-size:20px;padding:4px 18px}
+#lb-result{margin:8px auto 4px;max-width:420px}
+.lb-ranks{font-family:'Bangers',sans-serif;font-size:22px;letter-spacing:.04em;margin-bottom:6px}
+.lb-ranks b{color:var(--mag);font-size:28px}
+.lb-table{width:100%;border-collapse:collapse;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:15px;text-align:left}
+.lb-table td{padding:5px 8px;border-bottom:2px dashed rgba(11,4,16,.18);white-space:nowrap}
+.lb-table td:nth-child(2){width:100%;overflow:hidden;text-overflow:ellipsis;max-width:0}
+.lb-table td:nth-child(3){text-align:right}
+.lb-table td:nth-child(4){opacity:.55;font-size:12px}
+.lb-table tr.me td{background:var(--yel)}
+.lb-table tr.gap td{text-align:center;border:none;opacity:.5}
+.lb-count,.lb-empty{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;opacity:.7;margin:6px 0}
+.lb-name{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;margin:8px 0;display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap}
+.lb-name b{font-size:16px}
+.panel .lb-name button{font-size:14px;padding:2px 10px;box-shadow:2px 2px 0 var(--ink);transform:none;border-width:2px}
+.lb-input{font:700 16px 'Space Grotesk',sans-serif;text-transform:uppercase;padding:4px 8px;border:3px solid var(--ink);width:170px}
+.lb-panel{max-width:520px}
+.lb-tabs{display:flex;justify-content:center;gap:8px;margin:8px 0}
+.panel .lb-tabs button{font-size:22px;padding:2px 18px;transform:none;opacity:.5;box-shadow:3px 3px 0 var(--ink)}
+.panel .lb-tabs.small button{font-size:15px;padding:2px 12px}
+.panel .lb-tabs button.on{opacity:1;background:var(--cyan)}
+#lb-list{min-height:120px;max-height:46vh;overflow:auto;margin:6px 0}
+body.grid .lb-table td{border-bottom-color:rgba(106,180,255,.2)}
+body.grid .lb-table tr.me td{background:#0e3a52;color:#fff}
+body.grid .lb-ranks b{color:#ff2ea8}
+body.grid .lb-input{background:#05060c;color:#e8fbff;border-color:#2ef2ff}
+body.grid .panel .lb-tabs button.on{background:#2ef2ff;color:#05060c}
+
+#final .nb{display:block;font-family:'Bangers',sans-serif;font-size:24px;color:var(--mag);letter-spacing:.05em}
+#final .cause{font-size:20px}
+#final .stats{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;opacity:.75;margin-top:4px}
+.over-btns{margin:10px 0 4px}
+.lb-panel h2{font-size:clamp(34px,11vw,64px);white-space:nowrap}
+body.grid .panel .lb-tabs button{background:transparent;color:#9fd8ff;border:2px solid #2a5a7a}
+body.grid .panel .lb-tabs button.on{background:#2ef2ff;color:#05060c;border-color:#2ef2ff}
+.panel.lb-panel h2,body.grid .panel.lb-panel h2{font-size:clamp(28px,9.5vw,60px);letter-spacing:.02em;white-space:nowrap}

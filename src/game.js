@@ -222,7 +222,28 @@ export class Game {
     this.ui.setArmor(2); this.ui.setScore(0, 1); this.ui.setFocus(0, false);
   }
 
-  start(mode = 'run') { this.mode = mode; this.reset(); this.running = true; }
+  start(mode = 'run') {
+    this.mode = mode; this.reset(); this.running = true;
+    if (!this.learned) { try { this.learned = JSON.parse(localStorage.getItem('headbanger.learned')) || {}; } catch (e) { this.learned = {}; } }
+    if (mode === 'run') { this.learned.runs = (this.learned.runs || 0) + 1; this.saveLearned(); }
+  }
+  saveLearned() { try { localStorage.setItem('headbanger.learned', JSON.stringify(this.learned)); } catch (e) {} }
+  learn(k) { this.learned[k] = (this.learned[k] || 0) + 1; this.saveLearned(); }
+  // first ~minute of a player's first three runs is gentler: fewer goons, slower bullets, no rockets
+  get rookie() { return this.mode === 'run' && (this.learned?.runs || 0) <= 3 && this.time < 60; }
+  // just-in-time barrier hints until you've dodged each kind twice
+  hazardHint(p, touchUI) {
+    if (this.mode !== 'run') return null;
+    for (const h of this.hazards) {
+      if (!['low', 'high', 'lane'].includes(h.kind) || (this.learned[h.kind] || 0) >= 2 || !h.lanes || !h.lanes.includes(p.lane)) continue;
+      const dz = p.z - h.obj.position.z; if (dz <= 0 || dz / this.speed > 1.4) continue;
+      h.hinted = true;
+      if (h.kind === 'low') return ['jump', 'JUMP!', touchUI ? 'SWIPE ↑' : 'W  /  SPACE', '#ffe600'];
+      if (h.kind === 'high') return ['slide', 'SLIDE!', touchUI ? 'SWIPE ↓' : 'S  /  CTRL', '#ffe600'];
+      return ['lane', 'CHANGE LANE!', touchUI ? 'SWIPE ←  →' : 'A  /  D', '#ffe600'];
+    }
+    return null;
+  }
   emit(type, data = {}) { if (this.onEvent) this.onEvent(type, data); }
 
   // ------------------------------------------------------------ weapons
@@ -637,6 +658,7 @@ export class Game {
   activateFocus() {
     if (!this.running || this.p.dead || this.bulletTime || !this.focusCharges) return false;
     this.focusCharges = 0; this.headStreak = 0; this.ui.setStreak(0, false);
+    if (this.learned && !this.learned.focus) this.learn('focus');
     this.ui.pop('FOCUS', innerWidth / 2, innerHeight * 0.4, '#00e5ff', 80, true);
     this.enterBulletTime(); this.emit('focus');
     return true;
@@ -746,7 +768,7 @@ export class Game {
     const everyBar = H >= 2 || Math.random() < 0.5;
     const want = bar % 2 && !everyBar ? 0 : 1 + Math.floor(Math.random() * Math.min(4, 1.2 + H * 0.45));
     const maxAhead = Math.min(7, 3 + Math.ceil(H / 2));
-    const n = Math.max(0, Math.min(want, maxAhead - ahead));
+    const n = Math.max(0, Math.min(this.rookie ? Math.min(want, 1) : want, (this.rookie ? 2 : maxAhead) - ahead));
     const zBase = 26 + this.speed * 0.4; // close enough that you watch them drop in
     this.grap.onBar(bar);
     if (this.grap.blocks(this.p.z - zBase) || this.grap.blocks(this.p.z - zBase - 10)) return;
@@ -781,7 +803,8 @@ export class Game {
     const z = this.p.z - zAhead;
     if (this.grap.blocks(z)) return null;
     const kinds = isGrid() ? ['low', 'high', 'lane', 'dive', 'cross'] : ['low', 'high', 'lane', 'dive', 'cross', 'duck'];
-    const kind = forceKind || kinds[Math.floor(Math.random() * kinds.length)];
+    const pickFrom = this.rookie && !forceKind ? ['low', 'high', 'lane'] : kinds;
+    const kind = forceKind || pickFrom[Math.floor(Math.random() * pickFrom.length)];
     const b = BIOMES[this.world.biomeAt(z)];
     const g = new THREE.Group(); g.position.z = z;
     const red = flat(0xff1f3d), stripe = flat(0xffe600);
@@ -876,7 +899,7 @@ export class Game {
     const p = this.p;
     e.warn = 0.18;
     const muzzle = e.obj.userData.gun.getWorldPosition(new THREE.Vector3());
-    const T = 2 * BEAT; // game-time travel: lands two beats later
+    const T = (this.rookie ? 3 : 2) * BEAT; // game-time travel: lands two (rookies: three) beats later
     const targetZ = p.z - this.speed * T;
     for (let i = 0; i < pellets; i++) {
       const lx = pellets > 1 ? LANES[i] : this.camera.position.x;
@@ -1157,6 +1180,7 @@ export class Game {
         const inLane = h.lanes.includes(lane) && !p.wall && !this.grap.airborne();
         const overlap = bodyMax > h.yMin && bodyMin < h.yMax;
         this.emit('hazard', { kind: h.kind, ok: !(inLane && overlap) });
+        if (h.hinted && !(inLane && overlap)) this.learn(h.kind);
         if (inLane && overlap) this.hurt(h.kind === 'dive' || h.kind === 'cross' ? 'rocket' : h.kind === 'duck' ? 'duck' : 'barrier');
         else if (h.kind !== 'lane') { this.addScore(30); this.ui.pop(h.kind === 'high' ? 'LIMBO!' : h.kind === 'low' ? 'VAULT!' : 'DODGED!', innerWidth / 2, innerHeight * 0.66, '#fff6e0', 28); }
         if (h.kind === 'cross') { if (h.rocket) h.obj.remove(h.rocket); if (h.warn) h.obj.remove(h.warn); }
@@ -1235,6 +1259,9 @@ export class Game {
       else if (this.bulletTime) al = ['focus', 'FOCUS', touchUI ? 'TAP THE GOONS' : 'CLICK THE GOONS', '#00e5ff', true];
       else if (this.hazards.some((h) => h.kind === 'cross' && h.armed && (p.z - h.obj.position.z) / this.speed < 1.5 && p.z - h.obj.position.z > 0)) al = ['rocketX', 'ROCKET!', touchUI ? 'SWIPE ↓ SLIDE  or  ↑ JUMP' : 'SLIDE ↓  or  JUMP ↑', '#ff7a00'];
       else if (this.hazards.some((h) => h.kind === 'dive' && h.armed && (p.z - h.obj.position.z) / this.speed < 1.6 && p.z - h.obj.position.z > 0)) al = ['rocketD', 'ROCKET!', 'CHANGE LANE', '#ff7a00'];
+      else if (this.hazardHint(p, touchUI)) al = this.hazardHint(p, touchUI);
+      else if (this.mode === 'run' && this.focusCharges && !this.learned.focus) al = ['focusRdy', 'FOCUS READY!', touchUI ? 'TAP  FOCUS  FOR SLOW-MO' : 'PRESS  Q  FOR SLOW-MO', '#00e5ff'];
+      else if (this.mode === 'run' && this.learned.runs <= 2 && this.time < 7) al = ['move', 'DODGE & SHOOT', touchUI ? 'SWIPE ←  →   ·   TAP THE GOONS' : 'A / D  TO DODGE   ·   CLICK THE GOONS', '#ffe600'];
       else if (p.weapon === 'sword' && this.bullets.some((b) => !b.passed && !b.deflected && p.z - b.obj.position.z < 10 && p.z - b.obj.position.z > 0)) al = ['parry', 'PARRY IT!', touchUI ? 'TAP TO SLASH IT BACK' : 'CLICK TO SLASH IT BACK', '#00e5ff'];
       else if (p.ammo <= 0 && !WEAPONS[p.weapon].melee) al = ['throw', 'THROW YOUR GUN!', touchUI ? 'HIT  THROW' : 'PRESS  F  /  RIGHT-CLICK', '#ff1f3d'];
       else if (p.weapon === 'fists') al = ['grab', 'PUNCH A GOON!', touchUI ? 'TAP A GOON TO DISARM & STEAL' : 'CLICK A GOON TO DISARM & STEAL', '#ffe600'];

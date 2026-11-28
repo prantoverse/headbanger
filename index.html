@@ -61,6 +61,7 @@
         </div>
         <button id="btn-play">PLAY</button>
         <p class="best" id="best"></p>
+        <button id="btn-lb" class="secondary lb-open">🏆 LEADERBOARD</button>
         <p class="hint" id="menu-hint"></p>
       </div>
       <button id="btn-tutorial" class="notepad" aria-label="Tutorial">
@@ -85,8 +86,20 @@
     <div class="panel">
       <h2>WASTED</h2>
       <div id="final"></div>
-      <button id="btn-again">AGAIN</button>
-      <button id="btn-menu" class="secondary">MENU</button>
+      <div class="over-btns"><button id="btn-again">AGAIN</button><button id="btn-menu" class="secondary">MENU</button></div>
+      <div id="lb-result"></div>
+      <div class="lb-name" id="over-name"></div>
+    </div>
+  </div>
+
+  <div id="lb" class="screen hidden">
+    <div class="panel lb-panel">
+      <h2>LEADERBOARD</h2>
+      <div class="lb-tabs" id="lb-style"><button data-v="comic">COMIC</button><button data-v="grid">GRID</button></div>
+      <div class="lb-tabs small" id="lb-period"><button data-v="week">THIS WEEK</button><button data-v="all">ALL-TIME</button></div>
+      <div id="lb-list"><div class="lb-empty">Loading…</div></div>
+      <div class="lb-name" id="lb-name"></div>
+      <button id="btn-lb-close" class="secondary">CLOSE</button>
     </div>
   </div>
 
