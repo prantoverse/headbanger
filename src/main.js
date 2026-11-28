@@ -40,6 +40,17 @@ const game = new Game({ scene, camera, audio, world, ui, post, haptics });
 camera.position.set(0, 1.6, 0);
 
 import { LB, boardHTML, nameChip } from './leaderboard.js';
+import { Poki, POKI } from './poki.js';
+import '@fontsource/bangers/latin-400.css';
+import '@fontsource/orbitron/latin-700.css';
+import '@fontsource/orbitron/latin-900.css';
+import '@fontsource/caveat/latin-600.css';
+import '@fontsource/caveat/latin-700.css';
+import '@fontsource/permanent-marker/latin-400.css';
+import '@fontsource/space-grotesk/latin-500.css';
+import '@fontsource/space-grotesk/latin-700.css';
+Poki.init();
+const LB_ON = !POKI; // Poki blocks outside servers until approved
 
 let best = 0, runStart = 0;
 try { best = +localStorage.getItem('headbanger.best') || 0; } catch (e) {}
@@ -54,8 +65,9 @@ game.onGameOver = () => {
   if (newBest) { best = s; try { localStorage.setItem('headbanger.best', String(best)); } catch (e) {} }
   document.getElementById('final').innerHTML =
     `<b>${s.toLocaleString()}</b>${newBest ? '<span class="nb">NEW BEST!</span>' : ''}${game.lastCause ? '<div class="cause">KILLED BY: ' + game.lastCause + '</div>' : ''}<div class="stats">${st.kills} KILLS · ${st.heads} HEADSHOTS · ${st.beats} ON THE BEAT · ${Math.round(st.dist)}m</div>`;
-  ui.show('hud', false); ui.show('over', true); showBest();
+  ui.show('hud', false); ui.show('over', true); showBest(); Poki.stop();
   // global leaderboard
+  if (!LB_ON) { document.getElementById('lb-result').innerHTML = ''; document.getElementById('over-name').innerHTML = ''; return; }
   const lbEl = document.getElementById('lb-result');
   nameChip(document.getElementById('over-name'));
   if (game.mode !== 'run' || s <= 0) { lbEl.innerHTML = ''; return; }
@@ -122,7 +134,7 @@ async function startGame(mode) {
   await audioReady; await audio.loadStyle(STYLE.mode); audio.resume(); playBtn.textContent = label;
   ui.show('menu', false); ui.show('over', false); ui.show('hud', true);
   world.reset(); setpieces.reset();
-  game.start(mode); store.set('headbanger.tutSeen', '1'); runStart = performance.now();
+  game.start(mode); store.set('headbanger.tutSeen', '1'); runStart = performance.now(); Poki.start();
   audio.play(0);
   if (mode === 'tutorial') {
     store.set('headbanger.tutSeen', '1');
@@ -131,14 +143,38 @@ async function startGame(mode) {
   } else ui.biome(STYLE.mode === 'grid' ? 'THE GRID' : 'NEON ROOFTOPS');
 }
 function toMenu() {
-  tutorial.stop(); game.running = false; audio.stop();
+  tutorial.stop(); game.running = false; audio.stop(); Poki.stop();
   ui.show('hud', false); ui.show('over', false); ui.show('menu', true);
   refreshMenu(); showBest();
 }
-document.getElementById('btn-play').addEventListener('click', () => startGame());
-document.getElementById('btn-again').addEventListener('click', () => startGame('run'));
+document.getElementById('btn-play').addEventListener('click', () => viaBreak(() => startGame()));
+// every way back into gameplay is an ad opportunity (Poki decides whether one actually plays)
+const muteForAd = () => audio.ctx && audio.ctx.suspend();
+const viaBreak = (fn) => {
+  if (!audioReady) audioReady = audio.init(); // unlock audio inside the click (iOS), before any ad
+  audio.resume && audio.ctx && audio.resume();
+  return Poki.break(muteForAd).then(() => { audio.resume(); fn(); });
+};
+document.getElementById('btn-again').addEventListener('click', () => viaBreak(() => startGame('run')));
+
+// ---------------------------------------------------------------- pause
+let paused = false;
+function setPaused(on) {
+  if (on === paused || !game.running) return;
+  if (on) {
+    paused = true; Poki.stop(); audio.ctx && audio.ctx.suspend();
+    ui.show('pause', true);
+  } else {
+    ui.show('pause', false);
+    viaBreak(() => { paused = false; timer.update(); Poki.start(); });
+  }
+}
+document.getElementById('btn-resume').addEventListener('click', () => setPaused(false));
+document.getElementById('btn-pause-menu').addEventListener('click', () => { ui.show('pause', false); paused = false; toMenu(); });
+document.getElementById('btn-pause').addEventListener('pointerdown', (e) => { e.stopPropagation(); setPaused(true); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) setPaused(true); });
 document.getElementById('btn-menu').addEventListener('click', toMenu);
-notepad.addEventListener('click', () => startGame('tutorial'));
+notepad.addEventListener('click', () => viaBreak(() => startGame('tutorial')));
 document.getElementById('tut-card').addEventListener('pointerdown', (e) => { e.stopPropagation(); tutorial.ack(); });
 document.getElementById('btn-skip').addEventListener('pointerdown', (e) => { e.stopPropagation(); startGame('run'); });
 
@@ -185,8 +221,9 @@ canvas.addEventListener('pointercancel', endTouch);
 
 addEventListener('keydown', (e) => {
   if (e.target && e.target.tagName === 'INPUT') return; // typing a name
+  if (paused) { if (['Escape', 'KeyP', 'Enter', 'Space'].includes(e.code)) { e.preventDefault(); setPaused(false); } return; }
   if (!document.getElementById('lb').classList.contains('hidden')) { if (e.code === 'Escape') document.getElementById('btn-lb-close').click(); return; }
-  if (!game.running) { if (e.code === 'Enter' || e.code === 'Space') { const vis = !document.getElementById('menu').classList.contains('hidden') || !document.getElementById('over').classList.contains('hidden'); if (vis) startGame(); } return; }
+  if (!game.running) { if (e.code === 'Enter' || e.code === 'Space') { const vis = !document.getElementById('menu').classList.contains('hidden') || !document.getElementById('over').classList.contains('hidden'); if (vis) viaBreak(() => startGame()); } return; }
   if (e.ctrlKey || e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault(); // Ctrl = slide; stop Ctrl+D/S/A browser shortcuts
   if (e.repeat) return;
   if (tutorial.briefing) { if (e.code !== 'Escape') { tutorial.ack(); return; } }
@@ -198,7 +235,7 @@ addEventListener('keydown', (e) => {
     case 'KeyF': game.throwWeapon(pointer.x, pointer.y); break;
     case 'KeyQ': game.activateFocus(); break;
     case 'KeyE': game.grapple(); break;
-    case 'Escape': toMenu(); break;
+    case 'Escape': case 'KeyP': setPaused(true); break;
   }
 });
 document.getElementById('btn-throw').addEventListener('pointerdown', (e) => { e.stopPropagation(); game.throwWeapon(); });
@@ -233,7 +270,8 @@ renderer.setAnimationLoop(() => {
   timer.update();
   const dt = Math.min(Math.max(timer.getDelta(), 0), 0.05);
   pollGamepad();
-  if (game.running) {
+  if (paused) { /* frozen frame */ }
+  else if (game.running) {
     // machine-pistol: hold to spray
     if (pointer.down && WEAPONS[game.p.weapon].auto && !game.bulletTime) game.fire(pointer.x, pointer.y);
     for (const t of touches.values()) if (!t.swiped && WEAPONS[game.p.weapon].auto && performance.now() - t.t0 > 180) game.fire(t.x, t.y);
@@ -257,6 +295,6 @@ renderer.setAnimationLoop(() => {
 
 // show title pop-in
 document.getElementById('title').animate([{ transform: 'rotate(-3deg) scale(2)', opacity: 0 }, { transform: 'rotate(-3deg) scale(1)', opacity: 1 }], { duration: 500, easing: 'cubic-bezier(.2,1.6,.4,1)' });
-window.__game = game;
-window.__tut = tutorial;
-window.__sp = setpieces;
+if (!POKI) { window.__game = game; window.__tut = tutorial; window.__sp = setpieces; } // test hooks (not in the Poki build)
+if (!LB_ON) document.getElementById('btn-lb').style.display = 'none';
+Poki.loaded();

@@ -237,3 +237,7 @@ body.grid .panel .lb-tabs button.on{background:#2ef2ff;color:#05060c}
 body.grid .panel .lb-tabs button{background:transparent;color:#9fd8ff;border:2px solid #2a5a7a}
 body.grid .panel .lb-tabs button.on{background:#2ef2ff;color:#05060c;border-color:#2ef2ff}
 .panel.lb-panel h2,body.grid .panel.lb-panel h2{font-size:clamp(28px,9.5vw,60px);letter-spacing:.02em;white-space:nowrap}
+
+#btn-pause{position:absolute;top:max(14px,env(safe-area-inset-top));left:50%;transform:translateX(-50%);width:44px;height:44px;border-radius:50%;border:3px solid var(--ink);background:var(--paper);color:var(--ink);font:900 16px 'Space Grotesk',sans-serif;letter-spacing:-2px;pointer-events:auto;cursor:pointer;opacity:.85}
+body.grid #btn-pause{background:#05060c;color:#2ef2ff;border-color:#2ef2ff}
+.pause-panel button{margin:6px}
