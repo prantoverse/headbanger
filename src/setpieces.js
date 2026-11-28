@@ -229,6 +229,36 @@ function buildCroc(grid) {
   g.userData = { jaw, tail, legs, head };
   return g;
 }
+function buildSynthCat() {
+  // original GRID mascot: a neon wireframe cat in big headphones, flying to the beat
+  const g = new THREE.Group();
+  const fill = toon(0x0d1030), cyan = 0x2ef2ff, mag = 0xff2ea8;
+  const glow = (geo, col, x, y, z, sx, sy, sz) => {
+    const o = new THREE.Group(); o.position.set(x, y, z); o.scale.set(sx, sy, sz);
+    o.add(new THREE.Mesh(geo, fill));
+    o.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: col })));
+    return o;
+  };
+  const body = glow(BOX, cyan, 0, 0, 0, 6, 2.2, 2.4); g.add(body);
+  const head = new THREE.Group(); head.position.set(3.9, 0.9, 0); g.add(head);
+  head.add(glow(BOX, cyan, 0, 0, 0, 2.6, 2.2, 2.4));
+  const earG = new THREE.ConeGeometry(1, 1, 4);
+  for (const z of [-0.75, 0.75]) { const e = glow(earG, mag, -0.2, 1.6, z, 0.6, 1.2, 0.5); e.rotation.y = Math.PI / 4; head.add(e); }
+  for (const z of [-0.55, 0.55]) head.add(m(BOX, flat(cyan), 1.31, 0.25, z, 0.05, 0.22, 0.55)); // visor eyes
+  head.add(m(BOX, flat(mag), 1.31, -0.35, 0, 0.05, 0.12, 0.3)); // nose
+  for (const z of [-1, 1]) for (const dy of [-0.15, 0.1]) { const w = m(BOX, flat(0xffffff), 1.6, -0.3 + dy, z * 0.9, 1.0, 0.03, 0.03); w.rotation.y = z * 0.4; head.add(w); } // whiskers
+  // headphones
+  const band = new THREE.Mesh(new THREE.TorusGeometry(1.5, 0.14, 6, 24, Math.PI), flat(mag)); band.rotation.y = Math.PI / 2; band.position.y = 0.3; head.add(band);
+  for (const z of [-1.3, 1.3]) { const cup = m(CYL, toon(0x161a3e), 0, 0.2, z, 0.7, 0.4, 0.7); cup.rotation.x = Math.PI / 2; head.add(cup, m(CYL, flat(cyan), 0, 0.2, z * 1.17, 0.45, 0.05, 0.45)); head.children[head.children.length - 1].rotation.x = Math.PI / 2; }
+  // legs stretched out like it's flying
+  const legs = [];
+  for (const [x, z] of [[2.3, 1], [2.3, -1], [-2.3, 1], [-2.3, -1]]) { const l = glow(BOX, cyan, x + (x > 0 ? 0.6 : -0.6), -1.3, z, 1.6, 0.45, 0.45); l.rotation.z = x > 0 ? -0.5 : 0.5; g.add(l); legs.push(l); }
+  // tail: wavy segments
+  const tail = [];
+  for (let k = 0; k < 6; k++) { const t = glow(BOX, k % 2 ? mag : cyan, -3.4 - k * 0.75, 0.6 + k * 0.2, 0, 0.8, 0.35, 0.35); g.add(t); tail.push(t); }
+  g.userData = { head, legs, tail };
+  return g;
+}
 function buildDJ() {
   const g = new THREE.Group();
   const booth = toon(0x1c1c28), neon = flat(0xff2e88), cyan = flat(0x00e5ff), red = toon(0xff2418);
@@ -281,7 +311,7 @@ export class SetPieces {
 
   spawn(type, z) {
     const g = new THREE.Group(); g.position.z = z; this.scene.add(g);
-    if (this.world) this.world.clearZones.push(['paw', 'whale', 'dj', 'eyes', 'croc'].includes(type) ? [z - 260, z + 60] : [z - 110, z + 25]);
+    if (this.world) this.world.clearZones.push(['paw', 'whale', 'dj', 'eyes', 'croc', 'synthcat'].includes(type) ? [z - 260, z + 60] : [z - 110, z + 25]);
     const it = { type, obj: g, z, t: 0, parts: [] };
     if (type === 'mechs') {
       // giant mechs crouched beside the route; they blast off as you approach
@@ -339,6 +369,10 @@ export class SetPieces {
       }
     }
     if (type === 'whale') { const wh = buildWhale(); wh.position.set(-26, 44, 0); wh.scale.setScalar(1.3); g.add(wh); it.parts.push({ wh }); it.follow = 120; it.life = 16; it.spout = 0; it.bits = []; }
+    if (type === 'synthcat') {
+      const cat = buildSynthCat(); cat.position.set(-52, 16, 0); cat.rotation.y = 0.28; cat.scale.setScalar(2.4); g.add(cat);
+      it.parts.push({ cat }); it.follow = 58; it.life = 13; it.bars = []; it.barT = 0;
+    }
     if (type === 'croc') { const cr = buildCroc(isGrid()); const gy = isGrid() ? 20 : 30; cr.position.set(-46, gy, 0); cr.rotation.y = 0.35; cr.scale.setScalar(1.15); g.add(cr); it.parts.push({ cr, gy }); it.follow = 72; it.life = 16; }
     if (type === 'dj') { const dj = buildDJ(); dj.position.set(0, 34, 0); dj.scale.setScalar(1.8); g.add(dj); it.parts.push({ dj }); it.follow = 115; it.life = 13; }
     if (type === 'bikes') { // light bikes racing alongside you, dragging light walls
@@ -364,7 +398,7 @@ export class SetPieces {
     for (const it of this.items) it.lookX = playerX;
     // a new oddity roughly every 130m
     if (playerZ < this.nextAt) {
-      const types = (isGrid() ? ['bikes', 'rings', 'satellites', 'bikes', 'rings', 'mechs', 'croc'] : ['mechs', 'eyes', 'satellites', 'submarine', 'sedan', 'paw', 'moai', 'whale', 'dj', 'croc', 'mechs', 'eyes', 'paw', 'whale', 'dj', 'croc']).filter((t) => t !== this.last);
+      const types = (isGrid() ? ['bikes', 'rings', 'satellites', 'synthcat', 'bikes', 'rings', 'mechs', 'croc', 'synthcat'] : ['mechs', 'eyes', 'satellites', 'submarine', 'sedan', 'paw', 'moai', 'whale', 'dj', 'croc', 'mechs', 'eyes', 'paw', 'whale', 'dj', 'croc']).filter((t) => t !== this.last);
       const type = types[Math.floor(Math.random() * types.length)];
       this.last = type; this.spawn(type, playerZ - 185);
       this.nextAt = playerZ - 150;
@@ -453,6 +487,30 @@ export class SetPieces {
           }
         }
         for (let j = it.bits.length - 1; j >= 0; j--) { const q = it.bits[j]; q.life -= dt; q.v.y -= 12 * dt; q.b.position.addScaledVector(q.v, dt); q.b.rotation.x += dt * 6; if (q.life <= 0) { it.obj.remove(q.b); it.bits.splice(j, 1); } }
+      }
+      if (it.type === 'synthcat') {
+        const c = it.parts[0].cat, u = c.userData;
+        c.position.x += dt * 9; c.position.y = 16 + Math.sin(it.t * 2.2) * 1.4;
+        c.rotation.z = Math.sin(it.t * 2.2 + 1) * 0.08;
+        u.head.rotation.z = -beatPulse * 0.25;                 // head-bang
+        u.head.scale.setScalar(1 + beatPulse * 0.06);
+        u.legs.forEach((l, k) => (l.position.y = -1.3 + Math.sin(step * 9 + k * 1.7) * 0.25));
+        u.tail.forEach((t, k) => (t.position.y = 0.6 + k * 0.2 + Math.sin(it.t * 6 - k * 0.8) * 0.35 * (k + 1) * 0.4));
+        // equalizer trail: bars dropped behind it, bouncing on the beat, cyan → magenta
+        it.barT -= dt;
+        if (it.barT <= 0) {
+          it.barT = 0.09;
+          const k = it.bars.length, col = new THREE.Color(0x2ef2ff).lerp(new THREE.Color(0xff2ea8), (Math.sin(it.t * 3) + 1) / 2);
+          const bar = m(BOX, new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.9 }), 0, 0, 0, 1.0, 1, 1.0);
+          bar.position.set(c.position.x - 6.5 * 2.4, c.position.y - 0.4, 0); it.obj.add(bar);
+          it.bars.push({ bar, ph: k * 0.7, life: 2.2, y: c.position.y - 0.4 });
+        }
+        for (let j = it.bars.length - 1; j >= 0; j--) {
+          const q = it.bars[j]; q.life -= dt;
+          const h = 1 + (Math.sin(it.t * 9 + q.ph) * 0.5 + 0.5) * 4.5 * (0.4 + beatPulse);
+          q.bar.scale.y = h; q.bar.position.y = q.y; q.bar.material.opacity = Math.max(0, Math.min(0.9, q.life));
+          if (q.life <= 0) { it.obj.remove(q.bar); q.bar.material.dispose(); it.bars.splice(j, 1); }
+        }
       }
       if (it.type === 'croc') {
         const c = it.parts[0].cr, u = c.userData;
